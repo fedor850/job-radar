@@ -46,7 +46,7 @@ def test_prompts_render_without_placeholders(ai):
     for cfg in ({}, {"candidate": {"name": "Alex Example"}}):
         ai.configure(_Settings(cfg))
         blob = ai.SCORE_SYSTEM + ai.EMAIL_SYSTEM + json.dumps(ai.SCORE_SCHEMA) + json.dumps(ai.EMAIL_SCHEMA) \
-            + json.dumps(ai.CHECK_HINT) + json.dumps(ai.RU_BLOCKER, ensure_ascii=False)
+            + json.dumps(ai.CHECK_HINT) + json.dumps(ai.BLOCKER_LABEL)
         assert not re.search(r"\{\{[A-Z_0-9]+\}\}", blob)
 
 
@@ -61,7 +61,7 @@ def test_other_candidate_and_region(ai):
     assert "outside the Berlin area" in ai.SCORE_SYSTEM and "Prefer fintech start-ups.\n" in ai.SCORE_SYSTEM
     assert "€900" in ai.SCORE_SYSTEM and "Maria Muster" in ai.EMAIL_SYSTEM
     assert "Europe/Berlin" in json.dumps(ai.EMAIL_SCHEMA)
-    assert ai.RU_BLOCKER["not_vienna"] == "не Berlin" and "30" in ai.RU_BLOCKER["fulltime_only"]
+    assert ai.BLOCKER_LABEL["not_vienna"] == "outside Berlin" and "30" in ai.BLOCKER_LABEL["fulltime_only"]
     assert "Vienna" not in ai.SCORE_SYSTEM
     # the deterministic hours check follows the configured maximum
     job = {"id": 1, "title": "Analyst", "company": "X", "location": "Berlin", "description": "Teilzeit, 28 Stunden/Woche.",
@@ -98,3 +98,19 @@ def test_cv_builder_owner_rules(monkeypatch):
     spec["sections"][0]["text"] += " linkedin.com/in/alex"
     errors, _ = cvb.check_spec(spec, "cv")
     assert errors and "LinkedIn" in errors[0]
+
+
+def test_sheet_statuses_match_tracker():
+    from jobradar.tracker import STATUS_LABEL
+    code = (ROOT / "apps_script" / "Code.gs").read_text(encoding="utf-8")
+    statuses = re.search(r"var STATUSES = \[(.*?)\];", code, re.S).group(1)
+    assert re.findall(r"'([^']+)'", statuses) == list(STATUS_LABEL.values())
+
+
+def test_interface_is_english():
+    """No Cyrillic left in the bot, the Apps Script or the examples (the interface is English)."""
+    files = list((ROOT / "jobradar").rglob("*.py")) + [ROOT / "apps_script" / "Code.gs", ROOT / "deploy" / "watchdog.py"] \
+        + list((ROOT / "examples").iterdir())
+    bad = [f"{p.name}:{i}" for p in files for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+           if re.search("[\u0400-\u04FF]", line)]
+    assert not bad, bad

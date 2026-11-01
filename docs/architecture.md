@@ -93,8 +93,8 @@ proof:
   - *senior:* 3+ years, "several years", or a lead/head role.
   - *expired:* a date in the quote before today. *Not in the area:* a place that is not your area and not remote.
 - If a claim fails, the model is asked **once more**, with the exact reason. If it still cannot prove the claim, the
-  claim is ignored and the job is delivered at the threshold with a "⚠️ the AI suspected … but the ad does not say
-  so, check it yourself" note.
+  claim is ignored and the job is delivered at the threshold with a "⚠️ The AI suspected … but the ad does not say
+  so; check it yourself" note.
 - If the model fills in hours above your maximum but claims nothing, code checks the ad text by itself.
 - Malformed model answers are retried rather than used.
 

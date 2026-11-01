@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2026-11-01
+
+### Changed
+- The whole interface is in English: Telegram cards, buttons, commands and messages, the AI's summaries
+  ("why it fits", risks, how to apply), e-mail summaries, watchdog alerts and the Google Sheet
+  (*Dashboard*, *Applications*, *Feed*, English statuses).
+- E-mail classification fields are now `summary` / `action` (older stored e-mails still display).
+- Unknown status labels typed into the sheet no longer overwrite the bot's status.
+
+### Upgrading from 1.0.0
+- Update the Apps Script (see [docs/google-bridge.md](docs/google-bridge.md#updating-the-script)). An existing sheet with
+  other sheet names or status labels can be migrated once by filling in `LEGACY` at the top of `Code.gs`.
+- If you set `ai.why_example` or `referrals.alumni_label` in your `config.yaml`, write them in English.
+
 ## [1.0.0] — 2026-11-01
 
 First public release, after daily production use since October 2026.
@@ -25,4 +39,5 @@ First public release, after daily production use since October 2026.
   Vollzeitbasis" as proof only for regular jobs. Before, such jobs were delivered with "⚠️ the AI suspected…".
 - Seniority wording "7 plus years" and German "fundierte / solide / sichere Deutschkenntnisse" are recognised.
 
+[1.1.0]: https://github.com/fedor850/job-radar/releases/tag/v1.1.0
 [1.0.0]: https://github.com/fedor850/job-radar/releases/tag/v1.0.0

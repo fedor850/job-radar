@@ -9,7 +9,7 @@ then work without stopping. Never list questions in the chat or leave them for t
 reasonable assumption, mark it, and continue.
 
 ## 0. Input
-The job comes from Job Radar (the "📋 Для Claude" button sends a `.md` with the full ad, the link, the radar's score
+The job comes from Job Radar (the "📋 For Claude" button sends a `.md` with the full ad, the link, the radar's score
 and a line "Prepare for this job: …"), or as a link / text. If there is no text, ask for it (LinkedIn links often
 do not open).
 - Check whether I already applied to this company: the line "⚠️ The tracker already has applications to this
@@ -78,7 +78,7 @@ Short and factual. "Why us?" takes 3–4 sentences. For salary expectations and 
 - No pressure and no "please refer me" in the first message.
 
 ## 7. After applying
-- Remind me to press "✅ Подался" in Job Radar, especially for e-mail applications, where the company usually
+- Remind me to press "✅ Applied" in Job Radar, especially for e-mail applications, where the company usually
   sends no confirmation that the bot could see.
 - If the documents are ready but not sent yet, end with one line: what to send, where, and by when.
 

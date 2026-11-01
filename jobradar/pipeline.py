@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import anthropic
 
-from .ai import RU_BLOCKER, triage_verdict
+from .ai import BLOCKER_LABEL, triage_verdict
 from .links import best_link, classify_link, guess_ats_link, link_rank, match_in_db
 from .models import RawJob
 from .sources.boards import detect_board
@@ -343,9 +343,9 @@ class Pipeline:
         if a.get("_unverified") and not blockers and score < self.min_score:
             # the model kept a reason it could not prove even after a re-ask: never hide a job on a guess —
             # deliver it at the threshold with a warning instead
-            names = ", ".join(RU_BLOCKER.get(b, b) for b in a["_unverified"])
-            risks = [r for r in (a.get("risks") or []) if not r.startswith("⚠️ ИИ заподозрил")]
-            a["risks"] = [f"⚠️ ИИ заподозрил: {names} — но в тексте объявления этого нет; проверь сам"] + risks[:2]
+            names = ", ".join(BLOCKER_LABEL.get(b, b) for b in a["_unverified"])
+            risks = [r for r in (a.get("risks") or []) if not r.startswith("⚠️ The AI suspected")]
+            a["risks"] = [f"⚠️ The AI suspected: {names} — but the ad does not say so; check it yourself"] + risks[:2]
             a["_score_raised_from"] = score
             score = self.min_score
             a["score"] = score
@@ -431,7 +431,7 @@ class Pipeline:
                 return "rescored"
         a = job.get("analysis") or {}
         if has_student_signal(job.get("title") or "", job.get("description") or "", str(meta.get("employment_type") or "")):
-            note = "⚠️ Источник дал только фрагмент описания — часы и немецкий проверь по ссылке перед откликом"
+            note = "⚠️ The source gave only a snippet of the ad — check hours and language on the original before applying"
             a["risks"] = [note] + [r for r in (a.get("risks") or []) if r != note][:2]
             self.db.update_job(job_id, analysis=a)
             return "keep"
@@ -443,17 +443,17 @@ class Pipeline:
             res = await coro
             if self.db.kv_get("ai_down_alerted"):
                 self.db.kv_set("ai_down_alerted", False)
-                await self.notifier.text("✅ Claude API снова работает — оценка вакансий восстановлена.")
+                await self.notifier.text("✅ The Claude API works again — job scoring has resumed.")
             return res
         except anthropic.BadRequestError as e:
             msg = str(e)
             if "credit balance" in msg.lower() or "billing" in msg.lower():
-                await self._ai_alert("💳 На балансе Claude API закончились деньги — новые вакансии не оцениваются. "
-                                     "Пополни баланс: platform.claude.com → Settings → Billing. "
-                                     "Пропущенные вакансии я оценю автоматически после пополнения.")
+                await self._ai_alert("💳 The Claude API balance is used up — new jobs are not being scored. "
+                                     "Top up: platform.claude.com → Settings → Billing. "
+                                     "I'll score the missed jobs automatically afterwards.")
             raise AIUnavailable(msg) from e
         except anthropic.AuthenticationError as e:
-            await self._ai_alert("🔑 Ключ Claude API не работает (неверный или удалён). Нужен новый ключ.")
+            await self._ai_alert("🔑 The Claude API key does not work (wrong or deleted). A new key is needed.")
             raise AIUnavailable(str(e)) from e
         except (anthropic.APIConnectionError, anthropic.RateLimitError, anthropic.InternalServerError,
                 anthropic.APITimeoutError) as e:

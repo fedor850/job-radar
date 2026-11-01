@@ -43,7 +43,7 @@ def send(sec: dict, text: str) -> None:
     token, chat = sec.get("TELEGRAM_BOT_TOKEN"), sec.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
         return
-    data = urllib.parse.urlencode({"chat_id": chat, "text": "🐕 Сторож Job Radar: " + text}).encode()
+    data = urllib.parse.urlencode({"chat_id": chat, "text": "🐕 Job Radar watchdog: " + text}).encode()
     try:
         urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage", data=data, timeout=20).read()
     except Exception as e:  # noqa: BLE001
@@ -101,31 +101,31 @@ def main() -> None:
         st["activating"] = st.get("activating", 0) + 1
         if st["activating"] >= 2:
             tail = sh("journalctl", "-u", "jobradar", "-n", "6", "--no-pager", "-o", "cat")[-600:]
-            problems["crashloop"] = f"бот падает при запуске (systemd перезапускает его по кругу). Последние строки лога:\n{tail}"
+            problems["crashloop"] = f"the bot crashes at start-up (systemd keeps restarting it). Last log lines:\n{tail}"
     else:
         st["activating"] = 0
         if state != "active":
-            problems["down"] = f"служба была в состоянии «{state}» — перезапустил."
+            problems["down"] = f"the service was in state “{state}” — restarted it."
             restart = True
         elif service_age_min() > GRACE_MIN:
             age = last_run_age_min()
             if age is not None and age > STALE_MIN:
-                problems["stuck"] = f"бот завис: {int(age)} мин ни один источник не завершил проверку — перезапустил."
+                problems["stuck"] = f"the bot was stuck: no source finished a run for {int(age)} min — restarted it."
                 restart = True
             mem = rss_mb()
             if mem > RSS_MAX_MB:
-                problems["memory"] = f"бот занял {int(mem)} МБ памяти (норма 700–900) — перезапустил."
+                problems["memory"] = f"the bot used {int(mem)} MB of memory (normal: 700–900) — restarted it."
                 restart = True
     free_gb = shutil.disk_usage("/").free / 1e9
     if free_gb < DISK_MIN_GB:
-        problems["disk"] = f"на сервере осталось {free_gb:.1f} ГБ диска."
+        problems["disk"] = f"only {free_gb:.1f} GB of disk left on the server."
 
     if restart:
         restarts = [t for t in st.get("restarts", []) if now - t < 3600] + [now]
         st["restarts"] = restarts
         sh("systemctl", "restart", "jobradar")
         if len(restarts) >= 3:
-            problems["loop"] = "3 перезапуска за час не помогли — нужна проверка (логи: deploy.sh logs 200)."
+            problems["loop"] = "3 restarts within an hour did not help — needs a look (logs: deploy.sh logs 200)."
 
     alerted = st.get("alerted", {})
     for kind, text in problems.items():
@@ -133,7 +133,7 @@ def main() -> None:
             send(sec, text)
             alerted[kind] = now
     if not problems and st.get("had_problem") and state == "active" and service_age_min() > GRACE_MIN:
-        send(sec, "✅ всё снова в порядке.")
+        send(sec, "✅ everything is fine again.")
         st["had_problem"] = False
     elif problems:
         st["had_problem"] = True

@@ -49,7 +49,7 @@ def local(dt: datetime | None) -> datetime | None:
 
 
 def human_age(dt: datetime | None, ref: datetime | None = None) -> str:
-    """'3 мин назад', '2 ч назад', '5 дн назад' (Russian, short)."""
+    """'3 min ago', '2 h ago', '5 days ago' (short)."""
     if dt is None:
         return ""
     ref = ref or now_utc()
@@ -57,12 +57,12 @@ def human_age(dt: datetime | None, ref: datetime | None = None) -> str:
         dt = dt.replace(tzinfo=timezone.utc)
     sec = max(0, int((ref - dt).total_seconds()))
     if sec < 90:
-        return "только что"
+        return "just now"
     if sec < 3600:
-        return f"{sec // 60} мин назад"
+        return f"{sec // 60} min ago"
     if sec < 86400 * 2:
-        return f"{sec // 3600} ч назад"
-    return f"{sec // 86400} дн назад"
+        return f"{sec // 3600} h ago"
+    return f"{sec // 86400} days ago"
 
 
 _REL_DE = re.compile(r"vor\s+(\d+)\s+(Minute|Minuten|Stunde|Stunden|Tag|Tagen|Woche|Wochen)", re.I)
@@ -390,11 +390,11 @@ def strict_quote(quote: str, text: str) -> bool:
 
 
 _HOURS_NUM = re.compile(r"(\d{1,2})(?:[,.]\d)?\s*(?:[-–—]|bis|to)?\s*(\d{1,2})?(?:[,.]\d)?\s*"
-                        r"-?\s*(?:h\b|std\b|stunden|wochenstunden|hours?\b|hrs|ч\b|ч/|час)", re.I)
+                        r"-?\s*(?:h\b|std\b|stunden|wochenstunden|hours?\b|hrs)", re.I)
 
 
 def weekly_hours_range(s: str) -> tuple[int, int] | None:
-    """'20 ч/нед' → (20, 20); '20–30 h' → (20, 30); 'ab 25 Stunden' → (25, 25); None if no hours number."""
+    """'20 h/week' → (20, 20); '20–30 h' → (20, 30); 'ab 25 Stunden' → (25, 25); None if no hours number."""
     best = None
     for m in _HOURS_NUM.finditer(s or ""):
         a = int(m.group(1))

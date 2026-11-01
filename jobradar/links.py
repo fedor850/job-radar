@@ -103,18 +103,18 @@ def referral_links(settings, company: str, company_linkedin: str = "") -> list[t
     name = company.strip()
     links = [
         (
-            "👥 " + (settings.get("referrals.alumni_label") or "Выпускники"),
+            "👥 " + (settings.get("referrals.alumni_label") or "Alumni"),
             f"https://www.linkedin.com/search/results/people/?keywords={quote(name)}&schoolFilter={school_filter}"
             f"&origin=FACETED_SEARCH",
         ),
         (
-            "🎯 Рекрутеры",
+            "🎯 Recruiters",
             "https://www.linkedin.com/search/results/people/?keywords="
             + quote(f'{name} (recruiter OR "talent acquisition" OR HR)'),
         ),
     ]
     if company_linkedin and "/company/" in company_linkedin:
-        links.append(("🏢 Сотрудники", company_linkedin.rstrip("/") + "/people/"))
+        links.append(("🏢 Employees", company_linkedin.rstrip("/") + "/people/"))
     return links
 
 

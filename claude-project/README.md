@@ -6,12 +6,12 @@ letter or short motivation text only when the ad asks for one, and referral mess
 
 ## How it connects to the bot
 
-1. On a job card, press **📋 Для Claude** (*for Claude*). The bot sends a `.md` file with the full ad, its score, how to
+1. On a job card, press **📋 For Claude**. The bot sends a `.md` file with the full ad, its score, how to
    apply, and a line saying which documents to prepare (for example *CV + 3 sentences, no cover letter*).
 2. Forward that file to a **new chat in your project**.
 3. Claude checks the fit, asks up to four closed questions in one go, and builds the documents with
    [`cv_builder`](../cv_builder/README.md) in your design.
-4. You review, apply, and press **✅ Подался** (*applied*) in the bot so the follow-up reminder is set.
+4. You review, apply, and press **✅ Applied** in the bot so the follow-up reminder is set.
 
 ## Setup (15 minutes)
 

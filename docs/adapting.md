@@ -60,9 +60,9 @@ For another local language with the same logic (e.g. Dutch in the Netherlands), 
 regexes in `jobradar/ai.py` (`_GERMAN_*`, `_EITHER_OR`, `german_ad_check`) and the stop-word list in
 `jobradar/util.py → detect_lang`. That is a good task for an AI assistant.
 
-**Interface language.** The Telegram interface, the tracker sheet and the AI summaries are in Russian. English is the
-top item of the roadmap. Until then, change `Write all free-text fields … in RUSSIAN` in `SCORE_SYSTEM_TEMPLATE` to
-get English summaries, and translate the strings in `jobradar/bot.py`, `telegram_ui.py` and `apps_script/Code.gs`.
+**Interface language.** The Telegram interface, the tracker sheet and the AI's summaries are in English. The AI
+writes in the language named in `SCORE_SYSTEM_TEMPLATE` (`jobradar/ai.py`, "Write all free-text fields … in ENGLISH");
+change that line if you prefer another language for the summaries.
 
 ## 5. Sources
 

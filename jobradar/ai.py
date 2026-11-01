@@ -50,28 +50,28 @@ SCORE_SCHEMA_TEMPLATE = {
         "company_clean": {"type": "string"},
         "role_type": {"type": "string", "enum": ["internship", "trainee", "working_student", "part_time", "junior",
                                                   "full_time", "freelance", "other"]},
-        "hours": {"type": "string", "description": "weekly hours as stated, Russian, e.g. '20 ч/нед', '20–30 ч', 'не указано', 'полная ставка'"},
+        "hours": {"type": "string", "description": "weekly hours as stated, e.g. '20 h/week', '20–30 h', 'not stated', 'full-time'"},
         "hours_ok": {"type": "string", "enum": ["yes", "no", "unclear"]},
         "german": {"type": "string", "enum": ["not_needed", "plus", "basic_b1", "b2", "c1_fluent", "unclear"]},
         "ad_language": {"type": "string", "enum": ["en", "de", "other"]},
         "salary": {"type": "string", "description": "as stated in the ad, short; empty if none"},
         "salary_20h_eur": {"anyOf": [{"type": "number"}, {"type": "null"}],
                            "description": "gross EUR per month pro-rated to {{T}} h/week, null if unknown"},
-        "start": {"type": "string", "description": "start date, max 25 chars, e.g. 'сразу', 'янв 2027', 'гибко'; empty if none"},
+        "start": {"type": "string", "description": "start date, max 25 chars, e.g. 'immediately', 'Jan 2027', 'flexible'; empty if none"},
         "deadline": {"type": "string", "description": "application deadline as a date, max 20 chars; empty if none"},
         "workplace": {"type": "string", "enum": ["onsite", "hybrid", "remote", "unclear"]},
         "location": {"type": "string", "description": "city/district, short"},
-        "summary": {"type": "string", "description": "Russian, one sentence: what the job actually is"},
-        "why": {"type": "array", "items": {"type": "string"}, "description": "Russian, 2-3 bullets"},
-        "risks": {"type": "array", "items": {"type": "string"}, "description": "Russian, 0-3 bullets"},
-        "tip": {"type": "string", "description": "Russian, one line: what to emphasise in CV/cover letter"},
+        "summary": {"type": "string", "description": "one sentence: what the job actually is"},
+        "why": {"type": "array", "items": {"type": "string"}, "description": "2-3 bullets"},
+        "risks": {"type": "array", "items": {"type": "string"}, "description": "0-3 bullets"},
+        "tip": {"type": "string", "description": "one line: what to emphasise in CV/cover letter"},
         "german_evidence": {"type": "string",
                             "description": "EXACT quote (original language, max 140 chars) of the sentence where the ad "
                                            "states the German requirement or says English is enough / German optional / "
                                            "English is the working language; empty if the ad says nothing about German"},
         "how_to_apply": {"type": "string",
-                         "description": "Russian, max 160 chars: HOW and WHAT to send exactly as the ad says (channel, "
-                                        "e-mail address, language, special asks like '3 предложения о себе'); "
+                         "description": "max 160 chars: HOW and WHAT to send exactly as the ad says (channel, "
+                                        "e-mail address, language, special asks like '3 sentences about yourself'); "
                                         "empty if the ad gives no specific instructions"},
         "apply_docs": {"type": "array",
                        "items": {"type": "string", "enum": ["cv", "cover_letter", "short_motivation", "transcript",
@@ -83,8 +83,8 @@ SCORE_SCHEMA_TEMPLATE = {
                                         "is needed (e.g. 'no cover-letter essays', 'CV only', 'kein Anschreiben'), "
                                         "required only if the ad explicitly asks for one"},
         "missing": {"type": "array",
-                    "items": {"type": "string", "enum": ["часы", "зарплата", "требования к немецкому", "дата старта",
-                                                         "формат работы"]},
+                    "items": {"type": "string", "enum": ["hours", "pay", "German requirement", "start date",
+                                                         "work format"]},
                     "description": "criteria that the ad does NOT mention at all"},
         "evidence": {"type": "array",
                      "description": "one item per blocker: the EXACT passage of the ad (copied word for word, max 200 "
@@ -110,8 +110,8 @@ EMAIL_SCHEMA_TEMPLATE = {
         "company": {"type": "string"},
         "position": {"type": "string"},
         "tracker_match": {"type": "string", "description": "tracker_id from the provided list, or empty"},
-        "summary_ru": {"type": "string", "description": "Russian, max 2 sentences"},
-        "action_ru": {"type": "string", "description": "Russian: what {{FIRST}} must do now, empty if nothing"},
+        "summary": {"type": "string", "description": "max 2 sentences"},
+        "action": {"type": "string", "description": "what {{FIRST}} must do now, empty if nothing"},
         "deadline": {"type": "string", "description": "ISO date/datetime if a deadline is stated, else empty"},
         "event_start": {"type": "string", "description": "ISO datetime ({{TZ}}) of a FIXED interview/test slot, else empty"},
         "event_minutes": {"type": "integer"},
@@ -119,7 +119,7 @@ EMAIL_SCHEMA_TEMPLATE = {
         "contact_name": {"type": "string"},
         "contact_email": {"type": "string"},
     },
-    "required": ["job_related", "kind", "company", "position", "tracker_match", "summary_ru", "action_ru",
+    "required": ["job_related", "kind", "company", "position", "tracker_match", "summary", "action",
                  "deadline", "event_start", "event_minutes", "event_location", "contact_name", "contact_email"],
     "additionalProperties": False,
 }
@@ -154,7 +154,7 @@ Candidate profile:
 """
 
 SCORE_SYSTEM_TEMPLATE = """You evaluate job postings for one specific candidate (profile below) and return a structured verdict.
-Write all free-text fields (summary, why, risks, tip, hours, start, deadline, missing) in RUSSIAN, short and concrete.
+Write all free-text fields (summary, why, risks, tip, hours, start, deadline, how_to_apply) in ENGLISH, short and concrete.
 
 How to score (0–100):
 - 85–100: student/intern/trainee/working-student/junior role in a business field that matches his experience,
@@ -174,7 +174,7 @@ unknowns, impressions and "likely/probably" are NEVER blockers (score the job on
   working-student/part-time roles that allow ≤ {{M}} h, not when it says Teilzeit möglich / {{T}}–40 h / "ab {{T}} Stunden".
   If a full-time internship is offered without a part-time option, it IS fulltime_only.
   Hours of {{T1}}–{{M}} per week (e.g. "{{M}} h", "{{M1}} Stunden", "{{T}}–30 h") are NOT a blocker: set hours_ok="yes" and add the
-  risk "⏱ больше {{T}} ч — предложи работодателю {{T}} ч/нед" (he may be able to negotiate).
+  risk "⏱ more than {{T}} h — propose {{T}} h/week to the employer" (the candidate may be able to negotiate).
 - german_required: German above B1 is REQUIRED, or German is the main working language. Map the wording:
   "gute Deutschkenntnisse" / "good German" / "B2" → german="b2" → BLOCKER;
   "sehr gute" / "ausgezeichnete" / "exzellente" / "perfekte" / "verhandlungssicher" / "fließend" / "Muttersprache" /
@@ -200,9 +200,9 @@ german_evidence empty. Never assume "German not needed" for a German-language ad
 german_evidence must be copied word for word from the ad (it is checked against the text).
 
 Facts must be consistent and faithful to the ad:
-- "hours" = the contractual weekly hours (e.g. "50%" → "20 ч/нед (50%)"). Do not change them because of remarks about
+- "hours" = the contractual weekly hours (e.g. "50%" → "20 h/week (50%)"). Do not change them because of remarks about
   intensity. If the ad warns about intense weeks (e.g. "some weeks those 20 hours will feel like 40"), describe it
-  accurately as a remark about intensity ("предупреждают, что в напряжённые недели 20 ч ощущаются как 40"), never as
+  accurately as a remark about intensity ("they warn that in busy weeks 20 h can feel like 40"), never as
   "often 40 hours" or more hours than stated.
 - risks/why/tip must not contradict hours, salary, german, start or each other; never exaggerate or add "often",
   "usually", "probably" when the ad does not say so.
@@ -216,10 +216,10 @@ German level, start date, on-site/remote); if a criterion is stated in any form,
 everything else. Penalties for unknowns are small:
 - hours not stated: 0 for internships/working-student/part-time roles; −5 for regular jobs (hours_ok="unclear").
 - German level not stated and the ad is in English: no penalty (German is usually not needed); do not list it in missing.
-- pay not stated: no penalty, just "зарплата" in missing.
+- pay not stated: no penalty, just "pay" in missing.
 {{EXTRA_RULES}}Austrian ads often state salary "auf Vollzeitbasis (38,5h)" — that alone does not make a part-time/internship role full-time.
 Salary: compute salary_20h_eur = monthly gross pro-rated to {{T}} h/week (e.g. €2,600 for 38.5 h → ≈ €{{EX1}};
-€15/h → ≈ €{{EX2}}). If below €{{SAL}} add the risk "💶 ниже твоего минимума €{{SAL_RU}} за {{T}} ч (≈ €X)" — this never blocks.
+€15/h → ≈ €{{EX2}}). If below €{{SAL}} add the risk "💶 below your minimum of €{{SAL}} for {{T}} h (≈ €X)" — this never blocks.
 Never invent pay.
 "why": 2–3 bullets that connect concrete requirements of THIS posting to concrete facts from his profile
 (numbers welcome, e.g. "{{WHY_EXAMPLE}}"). No generic praise.
@@ -227,9 +227,8 @@ Never invent pay.
 Do not repeat items from "missing" in "risks".
 "tip": one line — what to emphasise in the application for THIS role.
 Be honest and calibrated; do not inflate scores.
-Russian style: natural, concise Russian. Keep German/English terms in their original spelling (e.g. "ganzjährig",
-"Werkstudent", "Vollzeit") — never transliterate German into Cyrillic. No HTML tags, no markdown in any field.
-Refer to the candidate as "ты" (informal), never by name.
+Style: natural, concise English. Keep German terms in their original spelling (e.g. "ganzjährig", "Werkstudent",
+"Vollzeit"). No HTML tags, no markdown in any field. Address the candidate as "you", never by name.
 
 Candidate profile:
 """
@@ -246,7 +245,7 @@ and classify those related to his job applications. Kinds:
 - job_alert: automated job recommendations/alerts (LinkedIn/Indeed/karriere alerts) — not an application event.
 - other: anything else (job_related=false for non-job e-mails).
 Match the e-mail to one of his tracked applications when the company clearly matches (return its tracker_id).
-Write summary_ru and action_ru in Russian. Use event_start only for a fixed, confirmed date/time, in ISO 8601 with offset.
+Write summary and action in English. Use event_start only for a fixed, confirmed date/time, in ISO 8601 with offset.
 """
 
 
@@ -327,7 +326,7 @@ def _consistency(res: dict, description: str) -> None:
         res["blockers"] = [b for b in (res.get("blockers") or []) if b != "german_required"]
         res["_german_override"] = "either_or"
     if res.get("cover_letter") != "not_wanted" and (_NO_COVER.search(description or "") or
-                                                    re.search(r"(сопроводительн\w+|cover letter)[^.;]{0,25}не нуж",
+                                                    re.search(r"(cover|motivation) letter[^.;]{0,25}(not (needed|required|necessary)|no need|unnecessary)",
                                                               res.get("how_to_apply") or "", re.I)):
         res["cover_letter"] = "not_wanted"
     # "send your CV and a few sentences" is a short motivation, not a request for a cover letter
@@ -559,12 +558,12 @@ _CHECK_HINT_TEMPLATE = {
     "wrong_field": "quote must show the field of work",
     "not_eligible": "quote must state who may apply",
 }
-_RU_BLOCKER_TEMPLATE = {"fulltime_only": "полная ставка / больше {{M}} ч", "german_required": "немецкий выше B1",
-              "senior": "нужен опыт 3+ года", "wrong_field": "чужая сфера", "not_vienna": "{{NOT_HOME_RU}}",
-              "eu_only": "только с гражданством ЕС / разрешением на работу", "not_eligible": "не та целевая группа",
-              "expired": "дедлайн прошёл"}
+_BLOCKER_LABEL_TEMPLATE = {"fulltime_only": "full-time / more than {{M}} h", "german_required": "German above B1",
+                           "senior": "3+ years of experience", "wrong_field": "unrelated field",
+                           "not_vienna": "outside {{CITY}}", "eu_only": "EU citizenship / work permit only",
+                           "not_eligible": "wrong target group", "expired": "deadline passed"}
 CHECK_HINT: dict[str, str] = {}
-RU_BLOCKER: dict[str, str] = {}
+BLOCKER_LABEL: dict[str, str] = {}  # short human labels of the stop factors
 
 
 # ---------------------------------------------------------------- candidate / region settings (config.yaml)
@@ -604,17 +603,16 @@ def configure(settings=None) -> None:
     rules = get("ai.extra_scoring_rules", []) or []
     v = {"T": TARGET_H, "T1": TARGET_H + 1, "M": MAX_H, "M1": MAX_H - 1, "CITY": CANDIDATE["city"],
          "NAME": name, "FIRST": CANDIDATE["first"], "TZ": CANDIDATE["timezone"],
-         "SAL": f"{sal:,}", "SAL_RU": f"{sal:,}".replace(",", " "),
+         "SAL": f"{sal:,}",
          "EX1": f"{round(2600 * TARGET_H / 38.5):,}", "EX2": f"{round(15 * TARGET_H * 4.33):,}",
          "EXTRA_RULES": "".join(f"{r.strip()}\n" for r in rules if str(r).strip()),
-         "WHY_EXAMPLE": get("ai.why_example") or "B2B-продажи: план ≈€50k/мес выполнялся — прямо про требование «sales quota»",
-         "NOT_HOME_RU": "не Вена" if CANDIDATE["city"] == "Vienna" else f"не {CANDIDATE['city']}"}
+         "WHY_EXAMPLE": get("ai.why_example") or "B2B sales: met a EUR 50k monthly target — matches the ad's sales-quota requirement"}
     SCORE_SYSTEM = _render(SCORE_SYSTEM_TEMPLATE, v)
     EMAIL_SYSTEM = _render(EMAIL_SYSTEM_TEMPLATE, v)
     SCORE_SCHEMA = _render_obj(SCORE_SCHEMA_TEMPLATE, v)
     EMAIL_SCHEMA = _render_obj(EMAIL_SCHEMA_TEMPLATE, v)
     CHECK_HINT.clear(); CHECK_HINT.update(_render_obj(_CHECK_HINT_TEMPLATE, v))
-    RU_BLOCKER.clear(); RU_BLOCKER.update(_render_obj(_RU_BLOCKER_TEMPLATE, v))
+    BLOCKER_LABEL.clear(); BLOCKER_LABEL.update(_render_obj(_BLOCKER_LABEL_TEMPLATE, v))
 
 
 configure()
@@ -694,17 +692,17 @@ def _enforce_blockers(res: dict, description: str = "", job: dict | None = None,
         if english_companies and english_workplace(job.get("company") or res.get("company_clean") or "",
                                                    english_companies):
             res["_german_ad_exempt"] = True
-            _add_risk(res, "⚠️ Объявление на немецком, требования к немецкому не указаны; у компании рабочий язык "
-                           "английский — уточни у рекрутера")
+            _add_risk(res, "⚠️ The ad is in German and states no German requirement; the company's working language "
+                           "is English — ask the recruiter")
         else:
             blockers.add("german_ad")
-            if "требования к немецкому" in (res.get("missing") or []):
-                res["missing"] = [m for m in res["missing"] if m != "требования к немецкому"]
+            if "German requirement" in (res.get("missing") or []):
+                res["missing"] = [m for m in res["missing"] if m != "German requirement"]
             if res.get("_german_ok_unverified"):
                 dropped.append("german_optional_quote")
     rng = weekly_hours_range(res.get("hours") or "")
     if rng and TARGET_H < rng[0] <= MAX_H and "fulltime_only" not in blockers:
-        _add_risk(res, f"⏱ больше {TARGET_H} ч — предложи работодателю {TARGET_H} ч/нед (лимит студенческого разрешения)")
+        _add_risk(res, f"⏱ more than {TARGET_H} h — propose {TARGET_H} h/week to the employer")
         if res.get("hours_ok") == "no":
             res["hours_ok"] = "yes"
     res["blockers"] = sorted(blockers)

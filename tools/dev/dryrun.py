@@ -24,11 +24,11 @@ class FakeAI:
         t=job["title"].lower()
         s = 85 if re.search(r"intern|prakti|student|werkstud|trainee", t) else 55
         return {"score": s, "verdict":"good","blockers":[],"title_clean":job["title"],"company_clean":job["company"],
-                "role_type":"internship","hours":"20 ч/нед","hours_ok":"yes","german":"plus","ad_language":"en",
-                "salary":"€2,600 (38.5h)","salary_20h_eur":1351,"start":"январь 2027","deadline":"",
-                "workplace":"hybrid","location":"Wien","summary":"Тестовая сводка вакансии.",
-                "why":["B2B-продажи: план ≈€50k/мес — прямо про требование","Excel/VBA модели цен — прямо про отчётность"],
-                "risks":["часы не указаны — уточнить 20 ч"],"tip":"Подчеркни B2B продажи и Excel."}
+                "role_type":"internship","hours":"20 h/week","hours_ok":"yes","german":"plus","ad_language":"en",
+                "salary":"€2,600 (38.5h)","salary_20h_eur":1351,"start":"January 2027","deadline":"",
+                "workplace":"hybrid","location":"Wien","summary":"Test summary of the job.",
+                "why":["B2B sales: met a EUR 50k monthly target — matches the requirement","Excel/VBA pricing models — matches the reporting tasks"],
+                "risks":["hours not stated — ask about 20 h"],"tip":"Stress B2B sales and Excel."}
 
 class FakeNotifier:
     ready=True

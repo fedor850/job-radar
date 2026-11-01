@@ -128,8 +128,8 @@ Then, in Telegram:
 1. Send **`/start`** to your bot. It greets you and offers to send the jobs that are already open.
 2. Send **`/test`** to see a sample card, and **`/status`** to see every source and the AI spend.
 
-Within the first hour the first real cards arrive. Ignore jobs that don't fit with **🙅 Не интересно**
-(*not interesting*) and pick a reason. The bot uses your reasons in the next evaluations.
+Within the first hour the first real cards arrive. Mark jobs that don't fit with **🙅 Not interested**
+and pick a reason. The bot uses your reasons in the next evaluations.
 
 ## 7. Optional extras
 
@@ -140,7 +140,7 @@ Within the first hour the first real cards arrive. Ignore jobs that don't fit wi
 ## 8. Day to day
 
 - React to cards within an hour or two. Early applicants are read first.
-- Press **✅ Подался** (*applied*) after applying. The bot adds the job to the tracker and reminds you to follow up after 7 days.
+- Press **✅ Applied** after applying. The bot adds the job to the tracker and reminds you to follow up after 7 days.
 - Change things without a deploy: `/minscore 55` (stricter), `/prefs no call-centre jobs` (a wish for the AI),
   `/pause` and `/resume`.
 - After editing `profile.md` or `config.yaml`, run `bash app/deploy/deploy.sh` again.

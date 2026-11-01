@@ -14,7 +14,7 @@ inside your own Google account. The bot calls it over HTTPS with a shared secret
 
 | Action | Access |
 |---|---|
-| `setup`, `log_job`, `upsert_tracker`, `get_tracker` | One spreadsheet it creates, "Job Radar — трекер откликов" |
+| `setup`, `log_job`, `upsert_tracker`, `get_tracker` | One spreadsheet it creates, "Job Radar — Application Tracker" (sheets *Dashboard*, *Applications*, *Feed*) |
 | `get_emails` | Reads (never sends or deletes) e-mails of the last days, excluding Sent, Spam, Promotions, Social and Forums |
 | `get_job_alerts` | Reads LinkedIn job-alert e-mails |
 | `create_event` | Creates an event in your default calendar when you press "📅 add to calendar" |
@@ -62,6 +62,12 @@ it already found by itself is skipped, so you never get duplicates.
 
 When `apps_script/Code.gs` changes (see the changelog), repeat steps 2–3 and then **Deploy → Manage deployments →
 edit (pencil) → Version: New version → Deploy**. The URL stays the same.
+
+**Migrating an older sheet.** If your spreadsheet was created by a version with other sheet names or status labels,
+fill in `LEGACY` at the top of `Code.gs` before pasting it, for example
+`{title: 'My old title', sheets: {'Old applications sheet': 'Applications', 'Old feed': 'Feed', 'Old summary': 'Dashboard'},
+statuses: {'Old applied label': '✅ Applied'}}`. On the next request the script renames the sheets, rewrites the headers,
+maps the statuses and rebuilds the dashboard, once.
 
 ## Troubleshooting
 

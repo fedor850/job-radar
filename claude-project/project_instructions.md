@@ -46,4 +46,4 @@ FILES
 
 FORMAT
 Short and to the point. Result first, explanations after. After delivering documents, remind me to press
-"✅ Подался" in Job Radar so the follow-up reminder is set.
+"✅ Applied" in Job Radar so the follow-up reminder is set.
