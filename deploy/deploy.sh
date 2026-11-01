@@ -24,7 +24,9 @@ private() {  # private <file> → path of the first existing copy
   echo "ERROR: $1 not found in $HOME_DIR or $HERE (copy it from examples/)" >&2; return 1
 }
 SECRETS="$(private secrets.env)"
-envval() { grep -E "^$1=" "$SECRETS" | tail -1 | cut -d= -f2- | tr -d '\r"' | sed "s/^'//; s/'\$//; s/^ *//; s/ *\$//"; }
+envval() {  # value of KEY in secrets.env, empty if the key is absent (never fails under set -e)
+  { grep -E "^$1=" "$SECRETS" || true; } | tail -1 | cut -d= -f2- | tr -d '\r"' | sed "s/^'//; s/'\$//; s/^ *//; s/ *\$//"
+}
 IP="$(envval SERVER_IP)"
 [ -n "$IP" ] || { echo "ERROR: SERVER_IP is empty in $SECRETS"; exit 1; }
 SSH_USER="$(envval SSH_USER)"; SSH_USER="${SSH_USER:-root}"
