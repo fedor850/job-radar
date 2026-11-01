@@ -1,4 +1,4 @@
 -r requirements.txt
-pytest>=8
-ruff>=0.6
-python-docx>=1.1   # cv_builder tests
+pytest>=9.2.0
+ruff>=0.17.3
+python-docx>=1.2.0   # cv_builder tests
