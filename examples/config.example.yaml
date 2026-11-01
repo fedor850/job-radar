@@ -1,0 +1,460 @@
+# ===================================================================
+#  Job Radar — settings. Secrets (tokens, API keys) live separately in secrets.env.
+#  Several settings can be changed right from Telegram (/minscore, /prefs, /pause).
+#  This example is the Vienna / Austria preset of the original author — see docs/adapting.md for other places.
+# ===================================================================
+
+candidate:                   # who is looking for a job (used in prompts, e-mail drafts, signature)
+  name: Alex Example
+  pitch: "B2B sales experience (met a EUR 50k monthly target), Excel/automation, top 10% GPA, available 20 h/week from December."   # 1–2 lines for follow-up e-mail drafts
+  claude_project: job search  # name of your Claude project that writes CVs (shown in the bot)
+  target_weekly_hours: 20      # hours you want (salary is pro-rated to these hours)
+  max_weekly_hours: 25         # more than this = "full-time" stop factor (remove fulltime_only from filters.blocking to allow any hours)
+  min_monthly_salary: 1200     # EUR gross for target_weekly_hours; below → 💶 note (never a stop factor)
+
+location:
+  city: Vienna
+  country_code: AT
+  home_patterns: []            # regexes for your search area; empty = built-in Vienna list (city, districts, suburbs)
+  # home_patterns: ['berlin', 'potsdam', '1[0-4]\d{3} berlin']   # example for Berlin
+  # country_patterns: ['germany', 'deutschland', 'de']           # "remote, <country>" counts as in the area
+
+general:
+  timezone: Europe/Vienna
+  log_level: INFO
+  bootstrap_hours: 48        # ads younger than 48 h from a new site/source are treated as new (with sound)
+  new_source_days: 10        # older ones (up to 10 days) are evaluated and delivered silently
+  max_age_days: 10           # HARD: ads published more than 10 days ago are never interesting
+  backfill_days: 10          # default window of /backfill
+  backfill_batch: 25         # how many of the best jobs /backfill sends at once
+  keep_text_days: 60         # text of unsent ads older than 60 days is deleted (the row stays for duplicate detection)
+
+ai:
+  triage: true               # cheap pre-filter on the title
+  triage_model: claude-haiku-5-5
+  score_model: claude-haiku-5-5
+  email_model: claude-haiku-5-5
+  text_model: claude-haiku-5-5
+  score_effort: low
+  score_thinking: true
+  score_max_tokens: 3000
+  max_description_chars: 9000
+  concurrency: 4
+  feedback_examples: 20      # how many of your latest reactions are shown to the AI for calibration
+  monthly_budget_usd: 10     # = your limit in the Anthropic console; the bot warns at 70% / forecast above the limit and at 90%
+  why_example: "B2B-продажи: план ≈€50k/мес выполнялся — прямо про требование «sales quota»"   # style example for the "why it fits" lines (AI output language is Russian)
+  extra_scoring_rules:       # optional extra rules for the scoring prompt (inserted as is)
+    - 'Summer internships (Sommerpraktikum / Ferialpraktikum / summer analyst, start June–Sept 2027) are a priority: a far-future start date is never a risk or a reason to lower the score; mention "летняя стажировка 2027" in why when it is one. Hours/German/field rules still apply.'
+
+filters:
+  min_score: 40              # notification threshold (change with /minscore)
+  # Stop factors that hide a job completely (remove one to turn that rule off, e.g. german_required / german_ad
+  # outside German-speaking countries, fulltime_only if you look for full-time work):
+  blocking: [fulltime_only, german_required, german_ad, senior, wrong_field, not_vienna, eu_only, not_eligible, expired]
+  # Obviously irrelevant titles — dropped without AI (regular expressions, case-insensitive)
+  title_exclude:
+    - '\b(senior|sr\.|principal|staff engineer|director|direktor|head of|vice president|vp|chief|cfo|ceo|cto|coo)\b'
+    - '\b(teamleit\w*|teamleader|team lead|abteilungsleit\w*|bereichsleit\w*|filialleit\w*|leiter|leiterin)\b'
+    - '\b(arzt|[äa]rztin|fach[äa]rzt|pflege|krankenpfleg|diplomierte|hebamme|therapeut|ordinationsassist|zahnarzt|apotheker)'
+    - '\b(koch|k[öo]chin|kellner|servicekraft|barkeeper|abwasch|k[üu]chenhilfe|sushi|pizza|backstube|b[äa]cker)'
+    - '\b(reinigung|raumpfleg|hausbesorg|haustechnik|elektriker|elektroniker|installateur|monteur|mechaniker|mechatroniker|schlosser|tischler|maurer|polier|maler und|spengler|dachdecker|schwei[ßs]er)'
+    - '\b(lagerarbeit|kommissionier|staplerfahrer|lkw|fahrer|chauffeur|zusteller|kurier)'
+    - '\b(lehrling|lehrstelle|lehre als|lehre zum|lehre zur|lehre nach der matura|sch[üu]ler)'
+    - '\b(friseur|nageldesign|masseur|fitnesstrainer|bademeister|sicherheitsdienst|wachdienst|security guard)'
+    - '\b(kindergarten|elementarp[äa]d|p[äa]dagog|tagesmutter|kinderbetreu)'
+  company_exclude: []
+  # Companies whose working language is English (regexes on the company name): their German-language ads WITHOUT
+  # German requirements are not hidden but delivered with a note "ask the recruiter". German above B1 still blocks.
+  english_workplace:
+    - 'united nations|\bun\b|\bunov\b|unodc|unoosa|uncitral|unido|iaea|\bosce\b|ctbto|opec|iiasa|icmpd|seforall|sustainable energy for all'
+    - 'anti-corruption academy|\biaca\b|energy community|wassenaar|international press institute|vcdnp|unhcr|\biom\b|international organization for migration'
+    - 'unicef|\bundp\b|\bunep\b|world bank|\bebrd\b|\bifc\b|fundamental rights agency'
+    - 'central european university|\bceu\b|webster|modul university|\bista\b|institute of science and technology austria|complexity science hub'
+    - 'bitpanda|sportradar|\bn26\b|sumup|\bwolt\b|too good to go|deepl|refurbed|bitmovin|storyblok|planradar|adverity|tourradar|dynatrace'
+    - 'prewave|fiskaly|gropyus|\bxund\b|nyra health|fonio|hydrogrid|mostly ai|anyline|craftworks|kickscale|\bbyrd\b|scalable capital|datadog|snowflake'
+
+links:
+  resolve: true              # look for the ad on the company's own site if it came from LinkedIn / a job board
+  search_min_score: 60       # Claude web search (paid, ~$0.02) — only for scores ≥ 60
+  search_daily_cap: 12
+  search_model: claude-haiku-5-5
+
+# Jooble / Careerjet return only a snippet of the description, and their pages are closed to servers.
+# The bot looks for the original (same job from another source → company site/ATS → JOIN). If not found:
+snippet:
+  web_search: true           # paid web search for the original (~$0.02) — only for jobs that would pass the threshold
+  search_daily_cap: 8        # at most 8 per day (≈ $5/month maximum)
+  # without the full text a job is sent only if the title/snippet clearly says part-time / student role
+
+referrals:
+  linkedin_school_ids: ["15091531"]   # your universities' LinkedIn IDs (alumni buttons); 15091531 = WU Vienna
+  alumni_label: Выпускники WU   # button text ("Alumni")
+
+tracker:
+  followup_days: 7
+  no_response_days: 35
+
+nudge:
+  enabled: true              # in the evening (20:30) remind about strong jobs you did not react to
+  min_score: 75
+
+mail:
+  interval_sec: 300
+  initial_days: 3
+
+health:
+  alert_after_fails:
+    default: 4
+    linkedin: 6
+    boards: 6
+    gmail: 4
+
+# ------------------------------------------------------------------- sources
+sources:
+  linkedin:
+    enabled: true
+    interval_sec: 360        # every 6 minutes (the 3 h window overlaps with margin; less often → fewer LinkedIn limits)
+    # LinkedIn shows a job in search with a delay, so the window is 3 hours (duplicates are dropped automatically).
+    window_sec: 10800
+    max_pages: 8
+    delay_sec: [2.0, 4.0]    # pause between requests (avoids blocking)
+    cooldown_sec: 900        # after "429 Too Many Requests": pause 15 min, repeated → 30 → 60 min
+    cooldown_max_sec: 3600
+    detail_delay_sec: [1.5, 3.0]   # pause before loading each job
+    sweep_per_run: 1         # keyword "sweep" searches per run (at night)
+    sweep_night: [20, 7]     # sweep from 20:00 to 07:00 (during the day LinkedIn throttles data-centre IPs)
+    day_sweep_every: 5       # during the day only every 5th run (≈ every 30 min)
+    queries:
+      - {keywords: "", location: "Vienna, Vienna, Austria", distance: 25}
+      - {keywords: "remote", location: "Austria", require_remote: true, window_sec: 21600, max_pages: 3}
+      # keyword sweep (24 h window, one query per run → a full round ≈ 2.5 h)
+      - {sweep: true, keywords: "intern", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "praktikum", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "werkstudent", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "working student", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "student", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "trainee", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "graduate", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "junior", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "part time", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "teilzeit", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "analyst", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "assistant", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "business development", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "sales", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "marketing", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "finance", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "consulting", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "operations", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "polish", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "russian", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "CEE", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "english", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "data analyst", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "business analyst", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "product", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "customer success", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "HR", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "recruiting", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "communications", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "procurement", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "supply chain", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "ESG", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "compliance", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "startup", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "founders associate", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "ukrainian", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "praktikant", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "studentische", location: "Vienna, Vienna, Austria", distance: 25}
+      # summer internships 2027 — 10-day window to catch ads that are already open
+      - {sweep: true, keywords: "summer internship", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+      - {sweep: true, keywords: "sommerpraktikum", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+      - {sweep: true, keywords: "summer analyst", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+      - {sweep: true, keywords: "summer associate", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+      - {sweep: true, keywords: "ferialpraktikum", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+      - {sweep: true, keywords: "summer 2027", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+      - {sweep: true, keywords: "praktikum sommer 2027", location: "Vienna, Vienna, Austria", distance: 25, window_sec: 864000, max_pages: 3}
+  indeed:
+    enabled: true
+    interval_sec: 300
+    hours_old: 2
+    results_wanted: 80
+    country: Austria
+    queries:
+      - {search_term: "", location: "Wien", distance: 25}
+      # summer internships: 10-day window, at most every 3 hours
+      - {search_term: "summer internship", location: "Wien", distance: 25, hours_old: 240, results: 50, min_interval_sec: 10800}
+      - {search_term: "sommerpraktikum", location: "Wien", distance: 25, hours_old: 240, results: 50, min_interval_sec: 10800}
+      - {search_term: "summer analyst", location: "Wien", distance: 25, hours_old: 240, results: 50, min_interval_sec: 10800}
+      - {search_term: "ferialpraktikum", location: "Wien", distance: 25, hours_old: 240, results: 50, min_interval_sec: 10800}
+  karriere:
+    enabled: true
+    interval_sec: 300
+    pages: 3
+    location_slug: wien
+  zbp:
+    enabled: true
+    interval_sec: 900
+  jobsat:                    # jobs.at — many ads of international companies (often in English)
+    enabled: true
+    interval_sec: 1200       # every 20 minutes: ~25 keyword queries
+    location_slug: wien
+  willhaben:                 # willhaben Jobs — large Austrian classifieds site
+    enabled: true
+    interval_sec: 3600       # may answer 403 to data-centre IPs → checked hourly
+    pages: 3
+    location: Wien
+  jooble:                  # key in secrets.env (JOOBLE_API_KEY); a free key has 500 requests in total
+    interval_sec: 43200    # every 12 hours
+    keywords_per_run: 1    # 1 query per run = 2 per day (lasts ~7 months)
+    request_cap: 440       # hard cap, the rest is a reserve
+  careerjet:               # key in secrets.env (CAREERJET_API_KEY)
+    interval_sec: 1800
+    referer: https://example.com/   # the website you registered the key with
+    user_ip: 203.0.113.10            # your server's public IP
+    keywords_per_run: 3    # ×2 locales = 6 queries per run
+  derstandard:               # DER STANDARD Jobs — banks, OeNB/FMA, international companies
+    enabled: true
+    interval_sec: 1200
+    location_slug: wien
+  # ---- generic sites (list page → job page with schema.org JobPosting)
+  sites:
+    - name: adzuna             # aggregator: collects jobs from company sites and small job boards
+      label: Adzuna
+      interval_sec: 900
+      urls:
+        - "https://www.adzuna.at/search?w=Wien&sb=date&p={page}"
+        - "https://www.adzuna.at/search?q={kw}&w=Wien&sb=date"
+      pages: 4
+      keywords: [praktikum, praktikant, intern, internship, werkstudent, "working student", student, trainee,
+                 junior, graduate, english, teilzeit, "part time", polnisch, russisch,
+                 "summer internship", sommerpraktikum, ferialpraktikum]
+      link: 'adzuna\.at/details/(?P<id>\d+)'
+      detail: "https://www.adzuna.at/details/{id}"
+      apply_link: 'href="(https://www\.adzuna\.at/land/ad/\d+[^"]*)"'
+      max_details: 60
+    - name: xing               # XING Jobs (DACH)
+      label: XING Jobs
+      interval_sec: 1200
+      urls: ["https://www.xing.com/jobs/search?keywords={kw}&location=Wien"]
+      keywords: [praktikum, praktikant, werkstudent, student, intern, internship, trainee, junior, graduate,
+                 english, teilzeit, "business development", sales, marketing, finance, controlling, consulting,
+                 "summer internship", sommerpraktikum, ferialpraktikum]
+      link: 'href="(?P<url>/jobs/[a-z0-9\-]+-(?P<id>\d{6,}))"'
+      max_details: 50
+    - name: iagora             # internships in English for international students
+      label: iAgora
+      interval_sec: 1800
+      urls: ["https://www.iagora.com/work/en/internships-vienna", "https://www.iagora.com/work/en/internships-vienna?offset=50",
+             "https://www.iagora.com/work/en/jobs-vienna"]
+      link: '(?P<url>https://www\.iagora\.com/work/en/offer/[a-z0-9\-]+/(?P<id>\d+))'
+      main_selector: "main"
+      company_regex: '^[^\n]*\n\n([^\n]{2,80})\n\n[^\n]*Austria'   # the company is plain text under the title
+    - name: workinaustria      # Work in Austria (ABA) — platform for international professionals
+      label: Work in Austria
+      interval_sec: 1800
+      urls: ["https://www.workinaustria.com/en/employees/jobs/"]
+      link: 'jobdetail/(?P<id>\d+)/(?P<slug>[a-z0-9\-]+)'
+      detail: "https://www.workinaustria.com/en/employees/jobs/jobdetail/{id}/{slug}"
+    - name: wujobs             # jobs at WU Vienna itself (student assistants, projects, institutes)
+      label: WU Jobs
+      company: "WU Wien"
+      interval_sec: 3600
+      urls: ["https://jobs.wu.ac.at", "https://jobs.wu.ac.at/eng"]
+      link: '(?P<url>https://jobs\.wu\.ac\.at/[^"\s]+-j(?P<id>\d+)\.html)'
+  boards:
+    enabled: true
+    interval_sec: 360        # ~140 company sites every 6 min
+    workers: 8
+
+# Seed list of company career sites (ATS with an open API). The radar adds new companies by itself when it sees
+# links to their ATS on Indeed / karriere.at / LinkedIn. Add one by hand in Telegram: /addcompany <link to a job>
+companies:
+  # --- Big Four / consulting / law
+  - {kind: smartrecruiters, key: DeloitteAT, company: "Deloitte Österreich"}
+  - {kind: workday, key: pwc/Global_Campus_Careers, company: "PwC Österreich (students)", host: pwc.wd3.myworkdayjobs.com, tenant: pwc, site: Global_Campus_Careers}
+  - {kind: workday, key: pwc/Global_Experienced_Careers, company: "PwC Österreich", host: pwc.wd3.myworkdayjobs.com, tenant: pwc, site: Global_Experienced_Careers}
+  - {kind: rmk, key: ey, company: "EY Österreich", host: careers.ey.com, prefix: /ey, locationsearch: Vienna}
+  - {kind: workday, key: accenture/AccentureCareers, company: "Accenture", host: accenture.wd103.myworkdayjobs.com, tenant: accenture, site: AccentureCareers}
+  - {kind: smartrecruiters, key: rolandberger, company: "Roland Berger"}
+  - {kind: workday, key: freshfields/FBD_101, company: "Freshfields", host: freshfields.wd3.myworkdayjobs.com, tenant: freshfields, site: FBD_101}
+  # --- international organisations in Vienna (working language: English)
+  - {kind: unjobs, key: un-vienna, company: "United Nations (Vienna)", min_interval_sec: 1800}   # UNOV, UNODC, UNOOSA, UNCITRAL, UNEP… (careers.un.org)
+  - {kind: taleo, key: iaea, company: "IAEA", host: iaea.taleo.net, portal: "8105100373", section: ex, min_interval_sec: 1200}
+  - {kind: rmk, key: unido, company: "UNIDO", host: careers.unido.org, locationsearch: Vienna}
+  - {kind: rmk, key: opecfund, company: "OPEC Fund for International Development", host: careers.opecfund.org, locationsearch: "", no_location_filter: true}
+  - {kind: lanteria, key: icmpd, company: "ICMPD", host: careers.icmpd.org}
+  - {kind: osce, key: osce, company: "OSCE", locations: [61, 63], min_interval_sec: 1200}
+  - {kind: workday, key: unhcr/External, company: "UNHCR", host: unhcr.wd3.myworkdayjobs.com, tenant: unhcr, site: External}
+  - {kind: workday, key: ceu/CEU, company: "Central European University (CEU)", host: ceu.wd3.myworkdayjobs.com, tenant: ceu, site: CEU}
+  - {kind: personio, key: modul-university-vienna-gmbh, company: "Modul University Vienna", tld: com}
+  # --- banks / finance / fintech
+  - {kind: rmk, key: rbi, company: "Raiffeisen Bank International", host: jobs.rbinternational.com, locationsearch: Wien}
+  - {kind: recruitee, key: erstedigital, company: "Erste Digital"}
+  - {kind: greenhouse, key: bitpanda, company: "Bitpanda"}
+  - {kind: greenhouse, key: n26, company: "N26"}
+  - {kind: smartrecruiters, key: ScalableGmbH, company: "Scalable Capital"}
+  - {kind: workday, key: mastercard/CorporateCareers, company: "Mastercard", host: mastercard.wd1.myworkdayjobs.com, tenant: mastercard, site: CorporateCareers}
+  - {kind: workday, key: corpay/Ext_001, company: "Corpay", host: corpay.wd103.myworkdayjobs.com, tenant: corpay, site: Ext_001}
+  - {kind: workday, key: ayvens/AyvensCareers, company: "Ayvens", host: ayvens.wd3.myworkdayjobs.com, tenant: ayvens, site: AyvensCareers}
+  # --- tech / start-ups in Vienna
+  - {kind: greenhouse, key: gostudent, company: "GoStudent"}
+  - {kind: greenhouse, key: refurbed, company: "refurbed"}
+  - {kind: greenhouse, key: bitmovin, company: "Bitmovin"}
+  - {kind: greenhouse, key: storyblok, company: "Storyblok"}
+  - {kind: greenhouse, key: planradar, company: "PlanRadar"}
+  - {kind: greenhouse, key: wolt, company: "Wolt"}
+  - {kind: greenhouse, key: kununu, company: "kununu"}
+  - {kind: ashby, key: fonio, company: "fonio.ai"}
+  - {kind: recruitee, key: nyrahealth, company: "nyra health"}
+  - {kind: personio, key: prewave, company: "Prewave", tld: de}
+  - {kind: smartrecruiters, key: ServiceNow, company: "ServiceNow"}
+  - {kind: workday, key: salesforce/External_Career_Site, company: "Salesforce", host: salesforce.wd12.myworkdayjobs.com, tenant: salesforce, site: External_Career_Site}
+  - {kind: workday, key: hp/ExternalCareerSite, company: "HP", host: hp.wd5.myworkdayjobs.com, tenant: hp, site: ExternalCareerSite}
+  - {kind: workday, key: snapchat/snap, company: "Snap Inc.", host: snapchat.wd1.myworkdayjobs.com, tenant: snapchat, site: snap}
+  - {kind: workday, key: hitachi/hitachi, company: "Hitachi Energy", host: hitachi.wd1.myworkdayjobs.com, tenant: hitachi, site: hitachi}
+  - {kind: smartrecruiters, key: frequentis, company: "Frequentis"}
+  - {kind: smartrecruiters, key: boschgroup, company: "Bosch"}
+  - {kind: smartrecruiters, key: DeliveryHero, company: "foodora / Delivery Hero"}
+  - {kind: smartrecruiters, key: NielsenIQ, company: "NielsenIQ"}
+  # --- FMCG / pharma / retail (often international teams)
+  - {kind: smartrecruiters, key: redbull, company: "Red Bull"}
+  - {kind: smartrecruiters, key: REWEInternationalDienstleistungsgesellschaftmbH, company: "REWE International"}
+  - {kind: workday, key: mdlz/External, company: "Mondelēz", host: mdlz.wd3.myworkdayjobs.com, tenant: mdlz, site: External}
+  - {kind: workday, key: mars/External, company: "Mars", host: mars.wd3.myworkdayjobs.com, tenant: mars, site: External}
+  - {kind: workday, key: msd/SearchJobs, company: "MSD", host: msd.wd5.myworkdayjobs.com, tenant: msd, site: SearchJobs}
+  - {kind: workday, key: jj/JJ, company: "Johnson & Johnson", host: jj.wd5.myworkdayjobs.com, tenant: jj, site: JJ}
+  - {kind: workday, key: sanofi/SanofiCareers, company: "Sanofi", host: sanofi.wd3.myworkdayjobs.com, tenant: sanofi, site: SanofiCareers}
+  - {kind: workday, key: astrazeneca/Careers, company: "AstraZeneca", host: astrazeneca.wd3.myworkdayjobs.com, tenant: astrazeneca, site: Careers}
+  - {kind: workday, key: baxter/baxter, company: "Baxter", host: baxter.wd1.myworkdayjobs.com, tenant: baxter, site: baxter}
+  - {kind: smartrecruiters, key: Sixt, company: "SIXT"}
+  # --- found by automatic ATS discovery (Workday / SuccessFactors / APIs)
+  # consulting, audit, finance
+  - {kind: workday, key: mmc/Careers, company: "Oliver Wyman / Marsh McLennan", host: mmc.wd1.myworkdayjobs.com, tenant: mmc, site: Careers}
+  - {kind: workday, key: mmc/MMC, company: "Marsh McLennan / Mercer", host: mmc.wd1.myworkdayjobs.com, tenant: mmc, site: MMC}
+  - {kind: workday, key: horvath/Horvath_Careers, company: "Horváth", host: horvath.wd3.myworkdayjobs.com, tenant: horvath, site: Horvath_Careers}
+  - {kind: rmk, key: capgemini, company: "Capgemini", host: careers.capgemini.com, locationsearch: Vienna}
+  - {kind: smartrecruiters, key: mazars, company: "Forvis Mazars"}
+  - {kind: smartrecruiters, key: wtw, company: "WTW"}
+  - {kind: workday, key: visa/Visa, company: "Visa", host: visa.wd5.myworkdayjobs.com, tenant: visa, site: Visa}
+  - {kind: workday, key: cisco/Cisco_Careers, company: "Cisco", host: cisco.wd5.myworkdayjobs.com, tenant: cisco, site: Cisco_Careers}
+  - {kind: amazon, key: amazon, company: "Amazon / AWS"}
+  # Austrian corporations (SuccessFactors)
+  - {kind: rmk, key: omv, company: "OMV", host: careers.omv.com, locationsearch: Wien}
+  - {kind: rmk, key: uniqa, company: "UNIQA", host: careers.uniqagroup.com, locationsearch: Wien}
+  - {kind: rmk, key: post, company: "Österreichische Post", host: karriere.post.at, locationsearch: Wien}
+  - {kind: rmk, key: porr, company: "PORR", host: jobs.porr-group.com, locationsearch: Wien}
+  - {kind: rmk, key: borealis, company: "Borealis", host: careers.borealisgroup.com, locationsearch: Wien}
+  - {kind: rmk, key: andritz, company: "ANDRITZ", host: careers.andritz.com, locationsearch: Vienna}
+  - {kind: rmk, key: rewegroup, company: "REWE Group", host: karriere.rewe-group.com, locationsearch: Wien}
+  # FMCG / tobacco / retail / luxury
+  - {kind: rmk, key: jti, company: "JTI (Japan Tobacco International)", host: jobs.jti.com, locationsearch: Wien}
+  - {kind: workday, key: swarovski/Swarovski, company: "Swarovski", host: swarovski.wd3.myworkdayjobs.com, tenant: swarovski, site: Swarovski}
+  - {kind: workday, key: richemont/Richemont, company: "Richemont", host: richemont.wd3.myworkdayjobs.com, tenant: richemont, site: Richemont}
+  - {kind: smartrecruiters, key: tipico, company: "Tipico"}
+  - {kind: smartrecruiters, key: entain, company: "Entain"}
+  # pharma / medtech
+  - {kind: workday, key: novartis/Novartis_Careers, company: "Novartis", host: novartis.wd3.myworkdayjobs.com, tenant: novartis, site: Novartis_Careers}
+  - {kind: workday, key: sandoz/Sandoz_Careers, company: "Sandoz", host: sandoz.wd103.myworkdayjobs.com, tenant: sandoz, site: Sandoz_Careers}
+  - {kind: workday, key: pfizer/PfizerCareers, company: "Pfizer", host: pfizer.wd1.myworkdayjobs.com, tenant: pfizer, site: PfizerCareers}
+  - {kind: workday, key: gsk/GSKCareers, company: "GSK", host: gsk.wd5.myworkdayjobs.com, tenant: gsk, site: GSKCareers}
+  - {kind: workday, key: amgen/Careers, company: "Amgen", host: amgen.wd1.myworkdayjobs.com, tenant: amgen, site: Careers}
+  - {kind: workday, key: medtronic/MedtronicCareers, company: "Medtronic", host: medtronic.wd1.myworkdayjobs.com, tenant: medtronic, site: MedtronicCareers}
+  - {kind: workday, key: thermofisher/ThermoFisherCareers, company: "Thermo Fisher", host: thermofisher.wd5.myworkdayjobs.com, tenant: thermofisher, site: ThermoFisherCareers}
+  - {kind: workday, key: abbott/AbbottCareers, company: "Abbott", host: abbott.wd5.myworkdayjobs.com, tenant: abbott, site: AbbottCareers}
+  - {kind: workday, key: stryker/StrykerCareers, company: "Stryker", host: stryker.wd1.myworkdayjobs.com, tenant: stryker, site: StrykerCareers}
+  - {kind: smartrecruiters, key: abbvie, company: "AbbVie"}
+  - {kind: rmk, key: boehringer, company: "Boehringer Ingelheim", host: jobs.boehringer-ingelheim.com, locationsearch: Vienna}
+  - {kind: rmk, key: bayer, company: "Bayer", host: jobs.bayer.com, locationsearch: Wien}
+  - {kind: rmk, key: octapharma, company: "Octapharma", host: careers.octapharma.com, locationsearch: Wien}
+  # industry / logistics
+  - {kind: workday, key: kone/Careers, company: "KONE", host: kone.wd3.myworkdayjobs.com, tenant: kone, site: Careers}
+  - {kind: lever, key: cargo-partner, company: "cargo-partner"}
+  # tech / start-ups / fintech (Vienna)
+  - {kind: workable, key: adverity, company: "Adverity"}
+  - {kind: personio, key: hokify, company: "hokify", tld: de}
+  - {kind: greenhouse, key: fiskaly, company: "fiskaly"}
+  - {kind: greenhouse, key: gropyus, company: "GROPYUS"}
+  - {kind: greenhouse, key: sumup, company: "SumUp"}
+  - {kind: ashby, key: toogoodtogo, company: "Too Good To Go"}
+  - {kind: recruitee, key: instahelp, company: "Instahelp"}
+  - {kind: ashby, key: deepl, company: "DeepL"}
+  - {kind: personio, key: hydrogrid, company: "HYDROGRID", tld: de}
+  - {kind: personio, key: glacier, company: "Glacier", tld: de}
+  - {kind: lever, key: unzer, company: "Unzer", eu: true}
+  - {kind: greenhouse, key: datadog, company: "Datadog"}
+  - {kind: ashby, key: snowflake, company: "Snowflake"}
+  - {kind: greenhouse, key: elastic, company: "Elastic"}
+  # universities (SuccessFactors)
+  - {kind: rmk, key: univie, company: "Universität Wien", host: jobs.univie.ac.at, locationsearch: Wien, no_location_filter: true}
+  # --- start-ups, consulting, NGOs, finance, pharma
+  - {kind: greenhouse, key: xund, company: "XUND"}
+  - {kind: recruitee, key: netconomy, company: "NETCONOMY"}
+  - {kind: recruitee, key: leitnerleitner, company: "LeitnerLeitner"}
+  - {kind: recruitee, key: merkur, company: "Merkur Versicherung"}
+  - {kind: greenhouse, key: infront, company: "Infront Consulting"}
+  - {kind: greenhouse, key: immoscout24, company: "ImmoScout24"}
+  - {kind: personio, key: bluecode, company: "Bluecode", tld: de}
+  - {kind: personio, key: russmedia, company: "Russmedia", tld: de}
+  - {kind: personio, key: greenpeace, company: "Greenpeace", tld: de}
+  - {kind: ashby, key: light, company: "Light for the World"}
+  - {kind: smartrecruiters, key: coface, company: "Coface"}
+  - {kind: rmk, key: semperit, company: "Semperit", host: jobs.semperitgroup.com, locationsearch: Wien}
+  - {kind: rmk, key: avl, company: "AVL", host: jobs.avl.com, locationsearch: Wien}
+  - {kind: workday, key: intrum/External, company: "Intrum", host: intrum.wd3.myworkdayjobs.com, tenant: intrum, site: External}
+  - {kind: workday, key: iqvia/IQVIA, company: "IQVIA", host: iqvia.wd1.myworkdayjobs.com, tenant: iqvia, site: IQVIA}
+  - {kind: workday, key: ipsen/Ipsen_Careers, company: "Ipsen", host: ipsen.wd103.myworkdayjobs.com, tenant: ipsen, site: Ipsen_Careers}
+  - {kind: workday, key: csl/CSL_External, company: "CSL Behring", host: csl.wd1.myworkdayjobs.com, tenant: csl, site: CSL_External}
+  # --- employers that posted Vienna jobs in the last 45 days (from the bot's database);
+  #     ATS found and verified (Vienna jobs listed, titles match what the bot saw)
+  - {kind: greenhouse, key: bybit, company: "Bybit EU", no_remote: true}
+  - {kind: lever, key: qualysoft, company: "Qualysoft", no_remote: true}
+  - {kind: recruitee, key: culinarius, company: "Culinarius"}
+  - {kind: ashby, key: camunda, company: "Camunda", no_remote: true}
+  - {kind: personio, key: europ-assistance, company: "Europ Assistance Österreich", tld: de}
+  - {kind: teamtailor, key: talentbird, company: "TalentBird"}
+  - {kind: greenhouse, key: indiecampers, company: "Indie Campers", no_remote: true}
+  - {kind: pinpoint, key: vintage, company: "Vintage"}
+  - {kind: personio, key: enpulsion, company: "ENPULSION", tld: de}
+  - {kind: recruitee, key: accilium, company: "accilium"}
+  - {kind: personio, key: aiya-europe, company: "AIYA Europe", tld: de}
+  - {kind: greenhouse, key: massarcapital, company: "Massar Capital", no_remote: true}
+  - {kind: greenhouse, key: suitsupply, company: "Suitsupply", no_remote: true}
+  - {kind: lever, key: aleph, company: "Aleph", no_remote: true}
+  - {kind: personio, key: gbtec, company: "GBTEC Austria", tld: de}
+  - {kind: recruitee, key: novritschtrading, company: "Novritsch Trading"}
+  - {kind: ashby, key: rohlik, company: "Rohlik / Gurkerl.at", no_remote: true}
+  - {kind: smartrecruiters, key: deltaelectronics, company: "Delta Electronics", no_remote: true}
+  - {kind: personio, key: glovis-europe, company: "Glovis Europe", tld: de}
+  - {kind: recruitee, key: transperfect, company: "TransPerfect", no_remote: true}
+  - {kind: bamboohr, key: woom, company: "woom"}
+  - {kind: bamboohr, key: acslogistics, company: "ACS Logistics"}
+  - {kind: personio, key: auvaria, company: "Auvaria", tld: de}
+  - {kind: personio, key: cloover, company: "Cloover", tld: de}
+  - {kind: personio, key: corplife, company: "Corplife", tld: de}
+  - {kind: join, key: hcm-advice, company: "HCM ADVICE"}
+  - {kind: join, key: interactivepaper, company: "Interactive Paper"}
+  - {kind: personio, key: pmone, company: "pmOne", tld: de}
+  - {kind: ashby, key: space44, company: "SPACE44", no_remote: true}
+  - {kind: bamboohr, key: toolsense, company: "ToolSense"}
+  - {kind: smartrecruiters, key: turnertownsend, company: "Turner & Townsend", no_remote: true}
+  - {kind: personio, key: daphos, company: "DaphOS", tld: de}
+  - {kind: teamtailor, key: oatly, company: "Oatly", no_remote: true}
+  - {kind: personio, key: onventis, company: "Onventis", tld: de}
+  - {kind: personio, key: recup, company: "RECUP", tld: de}
+  - {kind: personio, key: spinnwerk, company: "SPiNNWERK", tld: de}
+  - {kind: personio, key: towa, company: "TOWA", tld: de}
+  - {kind: personio, key: akquinet, company: "AKQUINET", tld: de}
+  - {kind: greenhouse, key: alpega, company: "Alpega", no_remote: true}
+  - {kind: lever, key: aop-health, company: "AOP Health"}
+  - {kind: recruitee, key: customssupport, company: "Customs Support Group", no_remote: true}
+  - {kind: join, key: friends-in-flats, company: "Friends in Flats"}
+  - {kind: teamtailor, key: helloagain, company: "Hello Again"}
+  - {kind: ashby, key: ideals, company: "Ideals", no_remote: true}
+  - {kind: bamboohr, key: niceshops, company: "niceshops"}
+  - {kind: smartrecruiters, key: oetiker, company: "Oetiker Group", no_remote: true}
+  - {kind: bamboohr, key: paxsapiens, company: "PAX sapiens"}
+  - {kind: personio, key: payuca, company: "payuca", tld: de}
+  - {kind: smartrecruiters, key: tomra, company: "TOMRA", no_remote: true}
+  - {kind: teamtailor, key: zanders, company: "Zanders", no_remote: true}
+

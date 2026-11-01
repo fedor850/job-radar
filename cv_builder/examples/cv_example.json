@@ -1,0 +1,29 @@
+{
+  "headline": "Business Analytics & Sales",
+  "page_size": "A4",
+  "sections": [
+    {"title": "SUMMARY", "type": "text",
+     "text": "Business and Economics student with two years of B2B sales and reporting experience. Met a monthly sales target of EUR 50,000 and automated pricing and reporting in Excel. Available from December: 20 h/week, Vienna."},
+    {"title": "SKILLS", "type": "lines", "lines": [
+      {"label": "Sales:", "text": "Account management · Negotiation · Pricing & offer preparation · Pipeline reporting"},
+      {"label": "Analytics & tools:", "text": "Excel (pivot tables, XLOOKUP, VBA) · PowerPoint · SQL · Python · Salesforce"}]},
+    {"title": "EXPERIENCE", "type": "entries", "entries": [
+      {"org": "EXAMPLE TRADING GMBH", "dates": "Jun. 2025 – Feb. 2026", "role": "Account Manager", "location": "Vienna, Austria",
+       "bullets": [
+         "Met a monthly sales target of EUR 50,000 by managing 40 B2B accounts end to end.",
+         "Grew monthly sales by 20% within three months through a data-driven prospecting routine.",
+         "Cut proposal preparation time by 60% with an automated Excel pricing model.",
+         "Prepared monthly sales, margin and forecast reports for management."]},
+      {"org": "STUDENT CONSULTING CLUB", "dates": "Oct. 2024 – Present", "role": "Project Lead", "location": "Vienna, Austria",
+       "bullets": [
+         "Led a team of 6 on a market-entry study for a local start-up; findings adopted by the founders.",
+         "Secured 5 corporate sponsors (EUR 10,000+ in total) for the club's annual conference."]}]},
+    {"title": "EDUCATION", "type": "entries", "entries": [
+      {"org": "EXAMPLE UNIVERSITY OF ECONOMICS", "dates": "2024 – 2027", "role": "B.Sc. Business and Economics", "location": "Vienna, Austria",
+       "bullets": [{"label": "GPA:", "text": "1.5; top 10% of the cohort."},
+                   "Courses: Econometrics, Finance, Business Analytics, Accounting."]}]},
+    {"title": "CERTIFICATIONS & LANGUAGES", "type": "bullets", "bullets": [
+      {"label": "Certifications:", "text": "Google Data Analytics Professional Certificate"},
+      {"label": "Languages:", "text": "English (C1); German (Native); Spanish (B1)"}]}
+  ]
+}

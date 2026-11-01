@@ -1,0 +1,33 @@
+[project]
+name = "job-radar"
+version = "1.0.0"
+description = "Real-time job alerts with AI scoring, a Telegram bot, an application tracker and a CV builder."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "fedor850" }]
+keywords = ["job-search", "telegram-bot", "claude", "anthropic", "job-alerts", "ats", "cv"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Office/Business",
+]
+
+[project.urls]
+Homepage = "https://github.com/fedor850/job-radar"
+Documentation = "https://github.com/fedor850/job-radar/tree/main/docs"
+Issues = "https://github.com/fedor850/job-radar/issues"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["tools/dev"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+# long prompt strings / regexes, short names in parsers, one-line guards: accepted style in this code base
+ignore = ["E501", "E701", "E702", "E741", "E402", "B023", "B905"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

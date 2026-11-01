@@ -1,0 +1,6 @@
+[Unit]
+Description=Job Radar watchdog (restart + Telegram alert if the bot is down/stuck)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/jobradar/app/deploy/watchdog.py
