@@ -16,7 +16,7 @@ KEYWORDS = re.compile(
     r"pymetrics|talent acquisition|recruit|hiring|vacanc|position|role|internship|praktikum|trainee|werkstudent|"
     r"offer|onboarding|contract|bewerbung|beworben|bewerber|vorstellungsgespr|gespr[aä]ch|einladung|absage|"
     r"zusage|stelle|leider|unfortunately|regret|not moving forward|thank you for your interest|"
-    r"aplikacj|rekrutac|rozmow|zaproszeni|oferta|собеседован|ваканси|отклик)\w*",
+    r"aplikacj|rekrutac|rozmow|zaproszeni|oferta)\w*",
     re.I,
 )
 ATS_SENDERS = re.compile(
@@ -39,13 +39,13 @@ KIND_EMOJI = {
     "info_request": "📎",
 }
 KIND_TITLE = {
-    "confirmation": "Отклик получен",
-    "rejection": "Отказ",
-    "interview": "Приглашение на интервью!",
-    "assessment": "Тест / задание",
-    "offer": "ОФФЕР!",
-    "recruiter_outreach": "Рекрутер написал",
-    "info_request": "Просят документы/информацию",
+    "confirmation": "Application received",
+    "rejection": "Rejection",
+    "interview": "Interview invitation!",
+    "assessment": "Test / task",
+    "offer": "OFFER!",
+    "recruiter_outreach": "A recruiter wrote",
+    "info_request": "Documents / information requested",
 }
 
 
@@ -133,7 +133,7 @@ class MailSync:
             app = self.tracker.find_by_company(c["company"])
         new_status = EMAIL_TO_STATUS.get(kind)
         when = local(parse_iso(e.get("date")) or now_utc())
-        last_email = f"{when:%d.%m} {KIND_TITLE.get(kind, kind)}: {clip(c.get('summary_ru',''), 140)}"
+        last_email = f"{when:%d.%m} {KIND_TITLE.get(kind, kind)}: {clip(c.get('summary') or c.get('summary_ru') or '', 140)}"
         contact = " ".join(x for x in [c.get("contact_name", ""), f"<{c['contact_email']}>" if c.get("contact_email") else ""] if x)
 
         if app:
@@ -159,7 +159,7 @@ class MailSync:
                                        followup_due=followup_due)
             await self.sheets.safe("upsert_tracker", {"row": {
                 "tracker_id": tid, "status": STATUS_LABEL.get(status, status), "company": c.get("company") or "",
-                "title": c.get("position") or "", "source": "Письмо", "last_email": last_email, "contact": contact,
+                "title": c.get("position") or "", "source": "E-mail", "last_email": last_email, "contact": contact,
                 "applied_at": when.strftime("%Y-%m-%d") if applied_at else "",
             }})
         self.db.save_email(e["id"], tracker_id=tid or "", **base)

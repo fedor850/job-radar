@@ -4,8 +4,8 @@ Thanks for helping. Job Radar is a small, practical project: changes should keep
 and safe for the person who relies on it every day.
 
 ## Good first contributions
-- **English interface** (`general.language`): move the Russian strings of `jobradar/bot.py`, `telegram_ui.py`,
-  `tracker.py` and `apps_script/Code.gs` into a message catalogue. This is the top roadmap item.
+- **Interface translations** (`general.language`): move the strings of `jobradar/bot.py`, `telegram_ui.py`,
+  `tracker.py` and `apps_script/Code.gs` into a message catalogue so other languages can be added.
 - **City presets**: a `config.yaml` + notes for your city (sources that work, a verified `companies` list).
 - **Source adapters**: a national job board or an ATS not yet supported (`jobradar/sources/`).
 - **Language rules** for another local language (see [docs/adapting.md](docs/adapting.md#4-languages)).

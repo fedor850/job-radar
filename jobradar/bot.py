@@ -52,8 +52,8 @@ from .util import clip, company_key, esc, human_age, iso, local, now_utc, parse_
 log = logging.getLogger("jobradar.bot")
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 SOURCE_NAMES = {"linkedin": "LinkedIn", "indeed": "Indeed", "karriere": "karriere.at", "zbp": "WU ZBP",
-                "jobsat": "jobs.at", "willhaben": "willhaben Jobs", "derstandard": "DER STANDARD Jobs", "jooble": "Jooble", "careerjet": "Careerjet", "gmail": "Почта (Gmail)",
-                "boards": "Сайты компаний", "linkedin_alerts": "LinkedIn Job Alerts (почта)"}
+                "jobsat": "jobs.at", "willhaben": "willhaben Jobs", "derstandard": "DER STANDARD Jobs", "jooble": "Jooble", "careerjet": "Careerjet", "gmail": "Mail (Gmail)",
+                "boards": "Company sites", "linkedin_alerts": "LinkedIn Job Alerts (mail)"}
 
 
 # ====================================================================== notifier
@@ -139,7 +139,7 @@ class Notifier:
         else:
             state, line = self._state_for(job)
             if (job.get("meta") or {}).get("company_link_found") and classify_link(job.get("apply_url") or "") == "company":
-                line = (line + "\n" if line else "") + "🏢 <i>Нашёл вакансию на сайте компании — кнопка ниже ведёт туда.</i>"
+                line = (line + "\n" if line else "") + "🏢 <i>Found the job on the company's own site — the button below goes there.</i>"
             text = render_job(job, line)
             kb = job_keyboard(self.settings, job, state)
         try:
@@ -155,23 +155,25 @@ class Notifier:
         label = SOURCE_NAMES.get(name, name)
         if h.get("fails", 0) >= threshold and not h.get("alerted"):
             self.db.set_alerted(name, 1)
-            await self.text(f"⚠️ Источник <b>{esc(label)}</b> не отвечает уже {h['fails']} проверок подряд.\n"
+            await self.text(f"⚠️ Source <b>{esc(label)}</b> has failed {h['fails']} runs in a row.\n"
                             f"<code>{esc(clip(h.get('last_error') or '', 300))}</code>\n"
-                            f"Остальные источники работают. Напишу, когда восстановится.")
+                            f"The other sources are working. I'll tell you when it recovers.")
         elif h.get("fails", 0) == 0 and h.get("alerted"):
             self.db.set_alerted(name, 0)
-            await self.text(f"✅ Источник <b>{esc(label)}</b> снова работает.", silent=True)
+            await self.text(f"✅ Source <b>{esc(label)}</b> is working again.", silent=True)
 
     async def email_event(self, e: dict, c: dict, tid: str) -> None:
         kind = c.get("kind", "")
-        lines = [f"{KIND_EMOJI.get(kind, '📧')} <b>{esc(KIND_TITLE.get(kind, 'Письмо'))}</b> · "
+        lines = [f"{KIND_EMOJI.get(kind, '📧')} <b>{esc(KIND_TITLE.get(kind, 'E-mail'))}</b> · "
                  f"{esc(c.get('company') or '')}" + (f" — {esc(clip(c.get('position') or '', 80))}" if c.get("position") else "")]
-        if c.get("summary_ru"):
-            lines.append(esc(c["summary_ru"]))
-        if c.get("action_ru"):
-            lines.append(f"👉 <b>{esc(c['action_ru'])}</b>")
+        summary = c.get("summary") or c.get("summary_ru")  # *_ru: e-mails classified before v1.1
+        action = c.get("action") or c.get("action_ru")
+        if summary:
+            lines.append(esc(summary))
+        if action:
+            lines.append(f"👉 <b>{esc(action)}</b>")
         if c.get("deadline"):
-            lines.append(f"⏳ Дедлайн: {esc(c['deadline'])}")
+            lines.append(f"⏳ Deadline: {esc(c['deadline'])}")
         if c.get("event_start"):
             st = parse_iso(c["event_start"])
             when = local(st).strftime("%a %d.%m %H:%M") if st else c["event_start"]
@@ -179,12 +181,12 @@ class Notifier:
         if tid:
             app = self.db.get_application(tid) or {}
             if app.get("status"):
-                lines.append(f"📊 Трекер: {esc(STATUS_LABEL.get(app['status'], app['status']))}")
+                lines.append(f"📊 Tracker: {esc(STATUS_LABEL.get(app['status'], app['status']))}")
         buttons = []
         if e.get("link"):
-            buttons.append(InlineKeyboardButton("📧 Открыть письмо", url=e["link"]))
+            buttons.append(InlineKeyboardButton("📧 Open e-mail", url=e["link"]))
         if c.get("event_start"):
-            buttons.append(InlineKeyboardButton("📅 В календарь", callback_data=f"ev:{e['id'][:40]}"))
+            buttons.append(InlineKeyboardButton("📅 Add to calendar", callback_data=f"ev:{e['id'][:40]}"))
         kb = InlineKeyboardMarkup([buttons]) if buttons else None
         await self.text("\n".join(lines), kb=kb)
 
@@ -257,25 +259,26 @@ class JobRadar:
                 self.db.kv_set("owner_chat_id", chat.id)
                 log.info("owner chat bound: %s", chat.id)
             self.db.kv_set("welcomed", True)
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("📥 Прислать открытые вакансии за 10 дней", callback_data="bf:10")]])
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("📥 Send open jobs from the last 10 days", callback_data="bf:10")]])
+            first_name = (self.settings.get("candidate.name") or "").split(" ")[0]
             await update.message.reply_text(
-                "👋 Привет, Фёдор! Я <b>Job Radar</b>.\n\n"
-                "Каждые несколько минут я проверяю LinkedIn, Indeed, karriere.at, jobs.at, DER STANDARD Jobs, willhaben, WU ZBP и ≈100 сайтов компаний, "
-                "оцениваю каждую новую вакансию под твой профиль и сразу присылаю подходящие — со ссылкой для "
-                "отклика, «почему подходит» и рисками.\n\n"
-                "Под каждой вакансией есть кнопки: ✅ <b>Подался</b> (запишу в трекер и напомню о follow-up через 7 дней), "
-                "⭐ <b>Сохранить</b>, 🙅 <b>Не интересно</b> (я учусь на твоих причинах) и 📋 <b>Для Claude</b> "
-                f"(файл вакансии для CV и письма в проекте {self.settings.get('candidate.claude_project', 'Claude')} — "
-                "ровно те документы, что просит объявление).\n\n"
-                "Команды — /help. Хочешь сразу получить вакансии, которые уже открыты?",
+                f"👋 Hi{(', ' + first_name) if first_name else ''}! I'm <b>Job Radar</b>.\n\n"
+                "Every few minutes I check LinkedIn, Indeed, job boards and hundreds of company career sites, "
+                "score every new job against your profile and send you the ones that fit right away — with the apply "
+                "link, why it fits and the risks.\n\n"
+                "Every job has buttons: ✅ <b>Applied</b> (I add it to the tracker and remind you to follow up in 7 days), "
+                "⭐ <b>Save</b>, 🙅 <b>Not interested</b> (I learn from your reasons) and 📋 <b>For Claude</b> "
+                f"(the job as a file for your CV and letter in the Claude project {self.settings.get('candidate.claude_project', 'Claude')} — "
+                "exactly the documents the ad asks for).\n\n"
+                "Commands: /help. Do you want the jobs that are already open right now?",
                 parse_mode=ParseMode.HTML, reply_markup=kb,
             )
             held = await self.pipeline.release_held()
             if held:
-                await self.notifier.text(f"📦 Прислал {held} вакансий, найденных до старта бота.", silent=True)
+                await self.notifier.text(f"📦 Sent {held} jobs found before the bot started.", silent=True)
             return
         if not self.is_owner(update):
-            await update.message.reply_text("Это личный бот.")
+            await update.message.reply_text("This is a private bot.")
             return
         await self.cmd_help(update, ctx)
 
@@ -283,57 +286,57 @@ class JobRadar:
         if not self.is_owner(update):
             return
         await update.message.reply_text(
-            "<b>Команды Job Radar</b>\n"
-            "/status — состояние источников, расходы, настройки\n"
-            "/stats — статистика за 7 дней (/stats 30 — за 30)\n"
-            "/minscore 50 — минимальная оценка для уведомлений (сейчас "
+            "<b>Job Radar commands</b>\n"
+            "/status — sources, AI spend, settings\n"
+            "/stats — statistics for 7 days (/stats 30 — for 30)\n"
+            "/minscore 50 — minimum score for notifications (now "
             f"{self.pipeline.min_score})\n"
-            "/prefs — твои пожелания для ИИ (/prefs не присылай колл-центры; /prefs clear)\n"
-            "/pause и /resume — поставить уведомления на паузу\n"
-            "/backfill 14 — прислать ещё открытые вакансии за N дней; /more — следующие\n"
-            "/tracker — ссылка на Google-таблицу с откликами\n"
-            "/addcompany &lt;ссылка&gt; — добавить компанию (ссылка на её вакансию/карьерную страницу)\n"
-            "/sources — какие сайты компаний я слежу\n"
-            "/followups — показать отклики, по которым пора написать follow-up\n"
-            "/test — прислать пример карточки",
+            "/prefs — your wishes for the AI (/prefs no call-centre jobs; /prefs clear)\n"
+            "/pause and /resume — pause notifications\n"
+            "/backfill 14 — send jobs still open from the last N days; /more — the next batch\n"
+            "/tracker — link to the Google Sheet with your applications\n"
+            "/addcompany &lt;link&gt; — watch a company (link to one of its jobs or its career page)\n"
+            "/sources — which company career sites I watch\n"
+            "/followups — applications due for a follow-up\n"
+            "/test — send a sample card",
             parse_mode=ParseMode.HTML,
         )
 
     async def cmd_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
             return
-        lines = [f"🛰 <b>Job Radar v{__version__}</b> · работает {human_age(self.started).replace(' назад', '')}"]
-        lines.append(("⏸ <b>На паузе</b>" if self.pipeline.paused else "▶️ Активен") +
-                     f" · мин. оценка: <b>{self.pipeline.min_score}</b>")
+        lines = [f"🛰 <b>Job Radar v{__version__}</b> · running for {human_age(self.started).replace(' ago', '')}"]
+        lines.append(("⏸ <b>Paused</b>" if self.pipeline.paused else "▶️ Active") +
+                     f" · min. score: <b>{self.pipeline.min_score}</b>")
         lines.append("")
         day = now_utc() - timedelta(hours=24)
         for h in self.db.health_all():
             name = h["name"]
             ok = parse_iso(h.get("last_ok"))
             icon = "🟢" if h.get("fails", 0) == 0 else ("🟠" if h.get("fails", 0) < 4 else "🔴")
-            lines.append(f"{icon} {SOURCE_NAMES.get(name, name)}: проверено {human_age(ok) if ok else '—'}"
-                         + (f" · ошибок подряд: {h['fails']}" if h.get("fails") else ""))
+            lines.append(f"{icon} {SOURCE_NAMES.get(name, name)}: checked {human_age(ok) if ok else '—'}"
+                         + (f" · failures in a row: {h['fails']}" if h.get("fails") else ""))
         boards = self.db.boards(enabled_only=False)
         seed = sum(1 for b in boards if b["origin"] == "seed")
         learned = sum(1 for b in boards if b["origin"] != "seed" and b["enabled"])
         failing = sum(1 for b in boards if b["enabled"] and (b.get("fails") or 0) >= 3)
-        lines.append(f"🏢 Сайтов компаний: {seed} базовых + {learned} найденных автоматически"
-                     + (f" ({failing} с ошибками)" if failing else ""))
+        lines.append(f"🏢 Company sites: {seed} seeded + {learned} found automatically"
+                     + (f" ({failing} failing)" if failing else ""))
         st = self.db.stage_counts(day)
         lines.append("")
-        lines.append(f"За 24 ч: новых вакансий {sum(st.values())}, прислано <b>{st.get('sent', 0)}</b>, "
-                     f"отсеяно ИИ {st.get('triage_reject', 0) + st.get('blocked', 0) + st.get('below_threshold', 0)}, "
-                     f"дубликатов {st.get('duplicate', 0)}" + (f", ошибок {st['error']}" if st.get("error") else ""))
+        lines.append(f"Last 24 h: {sum(st.values())} new jobs, <b>{st.get('sent', 0)}</b> sent, "
+                     f"{st.get('triage_reject', 0) + st.get('blocked', 0) + st.get('below_threshold', 0)} filtered out by the AI, "
+                     f"{st.get('duplicate', 0)} duplicates" + (f", {st['error']} errors" if st.get("error") else ""))
         month = local(now_utc()).strftime("%Y-%m-01")
         today = now_utc().strftime("%Y-%m-%d")
         u_today = self.db.usage_since(today)
         u_month = self.db.usage_since(month)
-        lines.append(f"💸 Claude API: сегодня ${u_today['cost']:.3f}, с начала месяца ${u_month['cost']:.2f}")
+        lines.append(f"💸 Claude API: today ${u_today['cost']:.3f}, this month ${u_month['cost']:.2f}")
         gm = parse_iso(self.db.kv_get("gmail_last_sync"))
-        lines.append(f"📧 Почта: {'проверена ' + human_age(gm) if gm else 'не подключена' if not self.sheets.enabled else 'ещё не проверялась'}")
+        lines.append(f"📧 Mail: {'checked ' + human_age(gm) if gm else 'not connected' if not self.sheets.enabled else 'not checked yet'}")
         sheet = self.db.kv_get("sheet_url")
         if sheet:
-            lines.append(f'📊 <a href="{esc(sheet)}">Трекер откликов</a>')
+            lines.append(f'📊 <a href="{esc(sheet)}">Application tracker</a>')
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
     async def cmd_stats(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -355,21 +358,21 @@ class JobRadar:
         def cnt(status: str) -> int:
             return sum(1 for a in apps if a.get("status") == status and (parse_iso(a.get("updated")) or since) >= since)
         cost = self.db.usage_since((now_utc() - timedelta(days=days)).strftime("%Y-%m-%d"))["cost"]
-        lines = [f"📊 <b>Статистика за {days} дн.</b>",
-                 f"Новых вакансий проверено: {sum(st.values())}",
-                 f"Прислано: <b>{st.get('sent', 0)}</b> (🔥 80+: {hot})",
-                 f"Ты: ✅ подался {us.get('applied', 0)} · ⭐ сохранил {us.get('saved', 0)} · 🙅 пропустил {us.get('skipped', 0)}",
-                 f"Ответы: 📝 тесты {cnt('assessment')} · 🎤 интервью {cnt('interview')} · 🏆 офферы {cnt('offer')} · ❌ отказы {cnt('rejected')}"]
+        lines = [f"📊 <b>Statistics for {days} days</b>",
+                 f"New jobs checked: {sum(st.values())}",
+                 f"Sent: <b>{st.get('sent', 0)}</b> (🔥 80+: {hot})",
+                 f"You: ✅ applied {us.get('applied', 0)} · ⭐ saved {us.get('saved', 0)} · 🙅 skipped {us.get('skipped', 0)}",
+                 f"Replies: 📝 tests {cnt('assessment')} · 🎤 interviews {cnt('interview')} · 🏆 offers {cnt('offer')} · ❌ rejections {cnt('rejected')}"]
         if sent_by_src:
             src = ", ".join(f"{SOURCE_NAMES.get(k, k)} {v}" for k, v in sorted(sent_by_src.items(), key=lambda x: -x[1]))
-            lines.append(f"Источники присланных: {esc(src)}")
+            lines.append(f"Sent by source: {esc(src)}")
         lines.append(f"💸 Claude API: ${cost:.2f}")
         if nudge:
             rows = self.db.query(
                 "SELECT * FROM jobs WHERE sent_at>=? AND score>=80 AND (user_status IS NULL OR user_status='') "
                 "ORDER BY score DESC LIMIT 5", (iso(since),))
             if rows:
-                lines.append("\n🔥 <b>Сильные вакансии без реакции:</b>")
+                lines.append("\n🔥 <b>Strong jobs without a reaction:</b>")
                 for r in rows:
                     j = self.db.row_to_job(r)
                     a = j.get("analysis") or {}
@@ -382,14 +385,14 @@ class JobRadar:
         if not self.is_owner(update):
             return
         self.db.kv_set("paused", True)
-        await update.message.reply_text("⏸ Пауза. Я продолжаю искать и оценивать, но не присылаю. /resume — продолжить.")
+        await update.message.reply_text("⏸ Paused. I keep searching and scoring but don't send anything. /resume to continue.")
 
     async def cmd_resume(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
             return
         self.db.kv_set("paused", False)
         n = await self.pipeline.release_held()
-        await update.message.reply_text("▶️ Снова присылаю вакансии." + (f" Пришлю {n} накопленных (без звука)." if n else ""))
+        await update.message.reply_text("▶️ Sending jobs again." + (f" I'll send the {n} held ones (silently)." if n else ""))
 
     async def cmd_minscore(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
@@ -397,10 +400,10 @@ class JobRadar:
         if ctx.args and ctx.args[0].isdigit():
             v = max(0, min(100, int(ctx.args[0])))
             self.db.kv_set("min_score", v)
-            await update.message.reply_text(f"Готово: присылаю вакансии с оценкой от <b>{v}</b>.", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"Done: sending jobs with a score of <b>{v}</b> or more.", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text(
-                f"Сейчас присылаю от <b>{self.pipeline.min_score}</b>/100. Изменить: <code>/minscore 55</code>",
+                f"Currently sending from <b>{self.pipeline.min_score}</b>/100. Change it: <code>/minscore 55</code>",
                 parse_mode=ParseMode.HTML)
 
     async def cmd_prefs(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -410,39 +413,39 @@ class JobRadar:
         arg = " ".join(ctx.args or []).strip()
         if arg.lower() == "clear":
             self.db.kv_set("prefs", [])
-            await update.message.reply_text("Пожелания очищены.")
+            await update.message.reply_text("Wishes cleared.")
             return
         if arg.lower().startswith("del ") and arg[4:].strip().isdigit():
             i = int(arg[4:].strip()) - 1
             if 0 <= i < len(prefs):
                 removed = prefs.pop(i)
                 self.db.kv_set("prefs", prefs)
-                await update.message.reply_text(f"Удалил: {removed}")
+                await update.message.reply_text(f"Removed: {removed}")
             return
         if arg:
             prefs.append(arg[:300])
             self.db.kv_set("prefs", prefs)
-            await update.message.reply_text(f"Запомнил. ИИ будет учитывать: «{arg[:300]}»")
+            await update.message.reply_text(f"Noted. The AI will take this into account: “{arg[:300]}”")
             return
         if not prefs:
             await update.message.reply_text(
-                "Пока пожеланий нет. Пример: <code>/prefs больше стартапов, меньше банков</code>\n"
-                "Удалить: <code>/prefs del 1</code>, очистить: <code>/prefs clear</code>", parse_mode=ParseMode.HTML)
+                "No wishes yet. Example: <code>/prefs more start-ups, fewer banks</code>\n"
+                "Remove one: <code>/prefs del 1</code>, clear all: <code>/prefs clear</code>", parse_mode=ParseMode.HTML)
             return
-        await update.message.reply_text("Твои пожелания:\n" + "\n".join(f"{i+1}. {p}" for i, p in enumerate(prefs)))
+        await update.message.reply_text("Your wishes:\n" + "\n".join(f"{i+1}. {p}" for i, p in enumerate(prefs)))
 
     async def cmd_tracker(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
             return
         url = self.db.kv_get("sheet_url")
-        await update.message.reply_text(f'📊 <a href="{esc(url)}">Трекер откликов (Google Таблица)</a>' if url
-                                        else "Трекер ещё не подключён.", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f'📊 <a href="{esc(url)}">Application tracker (Google Sheet)</a>' if url
+                                        else "The tracker is not connected yet.", parse_mode=ParseMode.HTML)
 
     async def cmd_sources(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
             return
         boards = self.db.boards(enabled_only=False)
-        lines = [f"🏢 <b>Сайты компаний ({sum(1 for b in boards if b['enabled'])} активных)</b>"]
+        lines = [f"🏢 <b>Company sites ({sum(1 for b in boards if b['enabled'])} active)</b>"]
         for b in sorted(boards, key=lambda x: (x["origin"] != "seed", (x.get("company") or x["key"]).lower())):
             if not b["enabled"]:
                 continue
@@ -459,19 +462,19 @@ class JobRadar:
         b = detect_board(url)
         if not b:
             await update.message.reply_text(
-                "Не узнал систему вакансий по этой ссылке. Подходят ссылки на вакансии/страницы вакансий в Workday, "
-                "SmartRecruiters, Greenhouse, Lever, Ashby, Personio, Recruitee, Workable. Пришли ссылку на любую "
-                "вакансию этой компании.")
+                "I don't recognise the career system behind this link. Links to jobs or job lists on Workday, "
+                "SmartRecruiters, Greenhouse, Lever, Ashby, Personio, Recruitee or Workable work. Send a link to any "
+                "job of this company.")
             return
         kind, key, params = b
         n = await asyncio.to_thread(probe_board, kind, key, params)
         if n is None:
-            await update.message.reply_text("Система распознана, но страница не отвечает. Проверь ссылку.")
+            await update.message.reply_text("The system is recognised, but the page does not answer. Check the link.")
             return
         company = " ".join(ctx.args[1:]) if len(ctx.args) > 1 else key.split("/")[0]
         self.db.upsert_board(kind, key, company, "manual", params)
-        await update.message.reply_text(f"✅ Добавил {company} ({kind}). Сейчас в Вене открыто: {n}. "
-                                        f"Новые вакансии этой компании буду ловить в течение нескольких минут.")
+        await update.message.reply_text(f"✅ Added {company} ({kind}). Open in your area right now: {n}. "
+                                        f"I'll catch this company's new jobs within a few minutes.")
 
     async def cmd_backfill(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
@@ -481,12 +484,12 @@ class JobRadar:
 
     async def start_backfill(self, days: int) -> None:
         if self.backfill_running:
-            await self.notifier.text("Уже собираю — подожди пару минут.")
+            await self.notifier.text("Already collecting — give me a couple of minutes.")
             return
         days = min(days, int(self.settings.get("general.max_age_days", 10)))
         self.backfill_running = True
-        await self.notifier.text(f"🔎 Собираю открытые вакансии за {days} дн. со всех источников и оцениваю их. "
-                                 f"Это займёт 5–15 минут, потом пришлю лучшие (без звука).")
+        await self.notifier.text(f"🔎 Collecting jobs still open from the last {days} days from all sources and scoring them. "
+                                 f"This takes 5–15 minutes; then I'll send the best ones (silently).")
         try:
             self.settings.cfg.setdefault("general", {})["backfill_days"] = days
             for name in self.sources:
@@ -501,11 +504,11 @@ class JobRadar:
             await self.pipeline.deliver(r["id"], silent=True)
         left = self.db.one("SELECT COUNT(*) n FROM jobs WHERE stage='held_backfill'")["n"]
         if first and not rows:
-            await self.notifier.text("Готово. Подходящих открытых вакансий выше порога не нашлось — новые буду присылать сразу.")
+            await self.notifier.text("Done. No open jobs above the threshold — I'll send new ones as soon as they appear.")
         elif left:
-            await self.notifier.text(f"📦 Прислал {len(rows)} лучших. Ещё {left} подходящих ждут — /more")
+            await self.notifier.text(f"📦 Sent the {len(rows)} best. {left} more good ones are waiting — /more")
         elif rows:
-            await self.notifier.text(f"📦 Готово: прислал {len(rows)} открытых вакансий. Дальше — только новые, сразу как появятся.")
+            await self.notifier.text(f"📦 Done: sent {len(rows)} open jobs. From now on only new ones, as soon as they appear.")
 
     async def cmd_more(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
@@ -518,7 +521,7 @@ class JobRadar:
         due = self.tracker.due_followups()
         if not due:
             waiting = self.db.applications({"applied", "confirmed"})
-            await update.message.reply_text(f"Пока follow-up не нужен. Ждут ответа: {len(waiting)}.")
+            await update.message.reply_text(f"No follow-ups due. Waiting for a reply: {len(waiting)}.")
             return
         for app in due:
             await self.send_followup_reminder(app)
@@ -528,10 +531,10 @@ class JobRadar:
             return
         row = self.db.one("SELECT * FROM jobs WHERE analysis IS NOT NULL AND analysis<>'' ORDER BY score DESC, id DESC LIMIT 1")
         if not row:
-            await update.message.reply_text("Пока нет оценённых вакансий — подожди первую проверку (несколько минут).")
+            await update.message.reply_text("No scored jobs yet — wait for the first run (a few minutes).")
             return
         job = self.db.row_to_job(row)
-        await self.notifier.text("🧪 Пример карточки (лучшая из оценённых):", silent=True)
+        await self.notifier.text("🧪 Sample card (the best scored job):", silent=True)
         if job.get("stage") == "sent":
             await self.notifier.send_job(job, silent=True)
         else:
@@ -541,7 +544,7 @@ class JobRadar:
     async def on_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         q = update.callback_query
         if not self.is_owner(update):
-            await q.answer("Это личный бот.")
+            await q.answer("This is a private bot.")
             return
         data = q.data or ""
         try:
@@ -553,20 +556,20 @@ class JobRadar:
             elif action == "ev":
                 await self.on_calendar(q, rest)
             elif action == "bf":
-                await q.answer("Начинаю…")
+                await q.answer("Starting…")
                 asyncio.get_running_loop().create_task(self.start_backfill(int(rest or 14)))
             else:
                 await q.answer()
         except Exception as e:  # noqa: BLE001
             log.exception("callback %s failed", data)
-            await q.answer(f"Ошибка: {str(e)[:150]}", show_alert=True)
+            await q.answer(f"Error: {str(e)[:150]}", show_alert=True)
 
     async def on_job_button(self, q, action: str, rest: str) -> None:
         parts = rest.split(":")
         job_id = int(parts[0])
         job = self.db.get_job(job_id)
         if not job:
-            await q.answer("Вакансия не найдена")
+            await q.answer("Job not found")
             return
         meta = job.get("meta") or {}
         a = job.get("analysis") or {}
@@ -576,13 +579,13 @@ class JobRadar:
             meta["user_status_at"] = iso(now_utc())
             self.db.update_job(job_id, user_status="applied", meta=meta)
             self.db.add_feedback(job_id, "applied", "", title, company)
-            await q.answer("✅ Записал в трекер. Напомню о follow-up через 7 дней.")
+            await q.answer("✅ Added to the tracker. I'll remind you to follow up in 7 days.")
             await self.tracker.record_job_action(self.db.get_job(job_id), "applied")
         elif action == "sv":
             meta["user_status_at"] = iso(now_utc())
             self.db.update_job(job_id, user_status="saved", meta=meta)
             self.db.add_feedback(job_id, "saved", "", title, company)
-            await q.answer("⭐ Сохранил в трекер")
+            await q.answer("⭐ Saved to the tracker")
             await self.tracker.record_job_action(self.db.get_job(job_id), "saved")
         elif action == "sk":
             await q.answer()
@@ -592,18 +595,18 @@ class JobRadar:
             code = parts[1] if len(parts) > 1 else "other"
             self.db.update_job(job_id, user_status="skipped", user_reason=code)
             self.db.add_feedback(job_id, "skip", SKIP_REASON_TEXT.get(code, code).split(" ", 1)[-1], title, company)
-            await q.answer("Понял, учту")
+            await q.answer("Got it, noted")
         elif action == "un":
             prev = job.get("user_status")
             self.db.update_job(job_id, user_status="", user_reason="")
             self.db.execute("DELETE FROM feedback WHERE id = (SELECT MAX(id) FROM feedback WHERE job_id=?)", (job_id,))
             if prev in ("applied", "saved"):
                 await self.tracker.remove_job_action(job)
-            await q.answer("Вернул")
+            await q.answer("Restored")
         elif action == "bk":
             await q.answer()
         elif action == "cl":
-            await q.answer("Отправляю файл…")
+            await q.answer("Sending the file…")
             await self.send_claude_file(job)
             return
         await self.notifier.refresh_job(job_id)
@@ -619,9 +622,9 @@ class JobRadar:
         await self.notifier._call(
             self.notifier.app.bot.send_document, chat_id=self.notifier.chat_id,
             document=io.BytesIO(data), filename=f"{safe}.md",
-            caption=(f"📋 Перешли этот файл в новый чат проекта <b>{self.settings.get('candidate.claude_project', 'Claude')}</b> в Claude "
-                     "(или открой чат в проекте и прикрепи файл) — Claude проверит fit, задаст вопросы и сделает "
-                     f"то, что просит объявление: <b>{docs_label(job)}</b>."),
+            caption=(f"📋 Forward this file to a new chat in your Claude project <b>{self.settings.get('candidate.claude_project', 'Claude')}</b> "
+                     "(or open a chat in the project and attach it). Claude checks the fit, asks its questions and prepares "
+                     f"what the ad asks for: <b>{docs_label(job)}</b>."),
             parse_mode=ParseMode.HTML,
         )
 
@@ -632,17 +635,17 @@ class JobRadar:
         days = (now_utc() - applied).days if applied else None
         n = int(app.get("followup_count") or 0)
         text = (f"⏰ <b>Follow-up</b> · {esc(app.get('company') or '')} — {esc(clip(app.get('title') or '', 80))}\n"
-                f"Подался {local(applied).strftime('%d.%m') if applied else '?'}"
-                + (f" ({days} дн. назад)" if days is not None else "") + ", ответа нет.\n"
-                + ("Короткое вежливое письмо рекрутеру заметно повышает шанс, что тебя заметят."
-                   if n == 0 else "Можно напомнить о себе ещё раз — коротко и по делу."))
+                f"Applied on {local(applied).strftime('%d.%m') if applied else '?'}"
+                + (f" ({days} days ago)" if days is not None else "") + ", no reply yet.\n"
+                + ("A short, polite note to the recruiter noticeably raises the chance that you get noticed."
+                   if n == 0 else "You can remind them once more — short and to the point."))
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✍️ Черновик письма", callback_data=f"fd:{tid}"),
-             InlineKeyboardButton("✉️ Написал(а)", callback_data=f"fw:{tid}")],
-            [InlineKeyboardButton("⏰ Через 3 дня", callback_data=f"fs:{tid}"),
-             InlineKeyboardButton("❌ Отказ", callback_data=f"fx:{tid}"),
-             InlineKeyboardButton("🔕 Не напоминать", callback_data=f"fn:{tid}")],
-        ] + ([[InlineKeyboardButton("🔗 Вакансия", url=app["url"])]] if app.get("url", "").startswith("http") else []))
+            [InlineKeyboardButton("✍️ Draft the e-mail", callback_data=f"fd:{tid}"),
+             InlineKeyboardButton("✉️ I wrote", callback_data=f"fw:{tid}")],
+            [InlineKeyboardButton("⏰ In 3 days", callback_data=f"fs:{tid}"),
+             InlineKeyboardButton("❌ Rejected", callback_data=f"fx:{tid}"),
+             InlineKeyboardButton("🔕 Stop reminding", callback_data=f"fn:{tid}")],
+        ] + ([[InlineKeyboardButton("🔗 Job ad", url=app["url"])]] if app.get("url", "").startswith("http") else []))
         await self.notifier.text(text, kb=kb)
         # don't re-send the same reminder tomorrow unless snoozed/answered
         self.db.upsert_application(tid, followup_due=iso(now_utc() + timedelta(days=3)))
@@ -650,31 +653,31 @@ class JobRadar:
     async def on_followup_button(self, q, action: str, tid: str) -> None:
         app = self.db.get_application(tid)
         if not app:
-            await q.answer("Не нашёл отклик в трекере")
+            await q.answer("Application not found in the tracker")
             return
         if action == "fd":
-            await q.answer("Пишу черновик…")
+            await q.answer("Writing a draft…")
             draft = await self.ai.followup_draft(app)
             contact = app.get("contact") or ""
             await self.notifier.text(
-                "✍️ <b>Черновик follow-up</b>" + (f" (кому: {esc(contact)})" if contact else "") +
-                "\nНажми на текст, чтобы скопировать:\n<pre>" + esc(draft) + "</pre>")
+                "✍️ <b>Follow-up draft</b>" + (f" (to: {esc(contact)})" if contact else "") +
+                "\nTap the text to copy it:\n<pre>" + esc(draft) + "</pre>")
             return
         if action == "fw":
             await self.tracker.followup_sent(tid)
-            await q.answer("Отметил. Если не ответят — напомню ещё раз через 7 дней.")
+            await q.answer("Noted. If they don't reply, I'll remind you again in 7 days.")
         elif action == "fs":
             await self.tracker.snooze(tid, 3)
-            await q.answer("Напомню через 3 дня")
+            await q.answer("I'll remind you in 3 days")
         elif action == "fn":
             self.db.upsert_application(tid, followup_due=None, followup_count=99)
-            await q.answer("Больше не напоминаю по этой вакансии")
+            await q.answer("No more reminders for this job")
         elif action == "fx":
-            await self.tracker.set_status(tid, "rejected", note="Отмечено в боте")
-            await q.answer("Отметил отказ")
+            await self.tracker.set_status(tid, "rejected", note="Marked in the bot")
+            await q.answer("Marked as rejected")
         elif action == "fo":
             await self.tracker.set_status(tid, "no_response")
-            await q.answer("Отметил «нет ответа»")
+            await q.answer("Marked as no response")
         try:
             await q.edit_message_reply_markup(reply_markup=None)
         except BadRequest:
@@ -683,16 +686,16 @@ class JobRadar:
     async def on_calendar(self, q, msg_prefix: str) -> None:
         row = self.db.one("SELECT * FROM emails WHERE msg_id LIKE ?", (msg_prefix + "%",))
         if not row:
-            await q.answer("Письмо не найдено")
+            await q.answer("E-mail not found")
             return
         import json as _json
         c = _json.loads(row["analysis"] or "{}")
         res = await self.sheets.call("create_event", {
-            "title": f"🎤 {c.get('company','')}: {c.get('position','') or KIND_TITLE.get(c.get('kind',''), 'Интервью')}",
+            "title": f"🎤 {c.get('company','')}: {c.get('position','') or KIND_TITLE.get(c.get('kind',''), 'Interview')}",
             "start": c.get("event_start"), "minutes": c.get("event_minutes") or 45,
-            "location": c.get("event_location") or "", "description": (c.get("summary_ru") or "") + "\n" + (c.get("link") or ""),
+            "location": c.get("event_location") or "", "description": (c.get("summary") or c.get("summary_ru") or "") + "\n" + (c.get("link") or ""),
         })
-        await q.answer("📅 Добавил в Google Календарь (напоминания за сутки и за час)" if res else "Не получилось")
+        await q.answer("📅 Added to Google Calendar (reminders a day and an hour before)" if res else "That didn't work")
 
     # ------------------------------------------------------------------ scheduled jobs
     async def job_source(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -742,8 +745,8 @@ class JobRadar:
             self.db.kv_set("alerts_since", max(int(x.get("epoch", 0)) for x in emails))
         if not self.db.kv_get("alerts_connected"):
             self.db.kv_set("alerts_connected", True)
-            await self.notifier.text("✅ Подключён запасной канал <b>LinkedIn Job Alerts</b>: вакансии из писем LinkedIn, "
-                                     "которые я не нашёл сам, теперь тоже приходят (без повторов).", silent=True)
+            await self.notifier.text("✅ Backup channel <b>LinkedIn Job Alerts</b> connected: jobs from LinkedIn alert e-mails "
+                                     "that I didn't find myself now arrive too (without duplicates).", silent=True)
         h = self.db.health_run("linkedin_alerts", True, items=len(raws), new=res["new"])
         await self.notifier.source_health("linkedin_alerts", h)
         if fresh:
@@ -769,7 +772,7 @@ class JobRadar:
         for app in self.db.applications({"applied", "confirmed"}):
             applied = parse_iso(app.get("applied_at"))
             if applied and (now_utc() - applied).days >= int(self.settings.get("tracker.no_response_days", 35)):
-                await self.tracker.set_status(app["tracker_id"], "no_response", note="Автоматически: 5 недель без ответа")
+                await self.tracker.set_status(app["tracker_id"], "no_response", note="Automatically: 5 weeks without a reply")
 
     async def job_weekly(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.info("scheduled: weekly report")
@@ -792,11 +795,11 @@ class JobRadar:
                     self.db.kv_set(key, True)
                     mins = int((now - last).total_seconds() // 60)
                     log.warning("source %s has not finished a run for %d min", name, mins)
-                    await self.notifier.text(f"⚠️ Источник <b>{esc(label)}</b> не завершал проверку уже {mins} мин "
-                                             f"(похоже, завис). Если не пройдёт само — сервис перезапустит сторож.")
+                    await self.notifier.text(f"⚠️ Source <b>{esc(label)}</b> has not finished a run for {mins} min "
+                                             f"(looks stuck). If it doesn't recover by itself, the watchdog will restart the service.")
             elif self.db.kv_get(key):
                 self.db.kv_set(key, False)
-                await self.notifier.text(f"✅ Источник <b>{esc(label)}</b> снова проверяется.", silent=True)
+                await self.notifier.text(f"✅ Source <b>{esc(label)}</b> is running again.", silent=True)
             # answers "OK" but returns nothing for 8+ hours → probably broken (HTML changed, key exhausted)
             z = self.db.kv_get(f"zero:{name}")
             zkey = f"zero_alerted:{name}"
@@ -805,12 +808,12 @@ class JobRadar:
                 if not self.db.kv_get(zkey):
                     self.db.kv_set(zkey, True)
                     hours = int((now - zsince).total_seconds() // 3600)
-                    await self.notifier.text(f"⚠️ Источник <b>{esc(label)}</b> отвечает, но уже {hours} ч не отдаёт "
-                                             f"ни одной вакансии ({z['n']} проверок подряд). Похоже, сайт поменялся "
-                                             f"или кончился лимит ключа — попроси Claude проверить.")
+                    await self.notifier.text(f"⚠️ Source <b>{esc(label)}</b> answers but has returned no jobs for {hours} h "
+                                             f"({z['n']} runs in a row). The site probably changed its layout "
+                                             f"or an API key ran out — time to check it.")
             elif not z and self.db.kv_get(zkey):
                 self.db.kv_set(zkey, False)
-                await self.notifier.text(f"✅ Источник <b>{esc(label)}</b> снова приносит вакансии.", silent=True)
+                await self.notifier.text(f"✅ Source <b>{esc(label)}</b> returns jobs again.", silent=True)
         budget = float(self.settings.get("ai.monthly_budget_usd", 0) or 0)
         if budget > 0:
             loc = local(now)
@@ -825,9 +828,9 @@ class JobRadar:
                 self.db.kv_set(key, level)
                 log.warning("Claude API budget: spent $%.2f of $%.0f, projected $%.2f", spent, budget, projected)
                 await self.notifier.text(
-                    f"💸 Claude API: с начала месяца ≈ ${spent:.2f} из лимита ${budget:.0f}, прогноз на месяц "
-                    f"≈ ${projected:.2f}. Когда лимит в консоли закончится, оценка вакансий остановится — "
-                    f"подними лимит расходов в platform.claude.com (Settings → Limits / Billing) и поменяй ai.monthly_budget_usd в config.yaml.")
+                    f"💸 Claude API: ≈ ${spent:.2f} spent this month of a ${budget:.0f} limit, forecast for the month "
+                    f"≈ ${projected:.2f}. When the console limit is reached, job scoring stops — "
+                    f"raise the spend limit at platform.claude.com (Settings → Limits / Billing) and update ai.monthly_budget_usd in config.yaml.")
 
     async def job_evening(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.info("scheduled: evening nudge")
@@ -837,7 +840,7 @@ class JobRadar:
             "ORDER BY score DESC LIMIT 6", (iso(since), int(self.settings.get("nudge.min_score", 75))))
         if not rows:
             return
-        lines = [f"🌙 <b>{len(rows)} сильных вакансий за сутки ждут твоей реакции</b> (чем раньше отклик — тем выше шанс):"]
+        lines = [f"🌙 <b>{len(rows)} strong jobs from the last day are waiting for your reaction</b> (the earlier you apply, the better):"]
         for r in rows:
             j = self.db.row_to_job(r)
             a = j.get("analysis") or {}
@@ -863,19 +866,19 @@ class JobRadar:
         self.notifier.app = app
         self.seed_boards()
         await app.bot.set_my_commands([
-            BotCommand("status", "Состояние радара"),
-            BotCommand("stats", "Статистика за 7 дней"),
-            BotCommand("tracker", "Google-таблица откликов"),
-            BotCommand("followups", "Кому пора написать follow-up"),
-            BotCommand("minscore", "Порог оценки"),
-            BotCommand("prefs", "Пожелания для ИИ"),
-            BotCommand("backfill", "Прислать уже открытые вакансии"),
-            BotCommand("more", "Ещё вакансий из подборки"),
-            BotCommand("addcompany", "Добавить компанию"),
-            BotCommand("sources", "Сайты компаний"),
-            BotCommand("pause", "Пауза"),
-            BotCommand("resume", "Продолжить"),
-            BotCommand("help", "Помощь"),
+            BotCommand("status", "Radar status"),
+            BotCommand("stats", "Statistics for 7 days"),
+            BotCommand("tracker", "Application tracker (Google Sheet)"),
+            BotCommand("followups", "Follow-ups due"),
+            BotCommand("minscore", "Score threshold"),
+            BotCommand("prefs", "Wishes for the AI"),
+            BotCommand("backfill", "Send jobs that are already open"),
+            BotCommand("more", "More jobs from the batch"),
+            BotCommand("addcompany", "Watch a company"),
+            BotCommand("sources", "Company sites"),
+            BotCommand("pause", "Pause"),
+            BotCommand("resume", "Resume"),
+            BotCommand("help", "Help"),
         ])
         if self.sheets.enabled:
             res = await self.sheets.safe("ping")
@@ -902,7 +905,7 @@ class JobRadar:
         jq.run_daily(self.job_backup, time=dtime(4, 0, tzinfo=tz), name="backup")
         if self.db.kv_get("last_version") != __version__:
             self.db.kv_set("last_version", __version__)
-            await self.notifier.text(f"🟢 Job Radar v{__version__} запущен. Источники: "
+            await self.notifier.text(f"🟢 Job Radar v{__version__} started. Sources: "
                                      + ", ".join(SOURCE_NAMES.get(n, n) for n in self.sources) + ".", silent=True)
 
     def build(self) -> Application:

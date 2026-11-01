@@ -527,7 +527,7 @@ class BoardsSource(Source):
     """Polls every enabled company board stored in the DB (seeded from config + learned automatically)."""
 
     name = "boards"
-    label = "Сайты компаний"
+    label = "Company sites"
 
     def __init__(self, settings, params=None, db=None):
         super().__init__(settings, params)

@@ -55,7 +55,9 @@ def test_status():
     assert should_change("applied", "interview")
     assert not should_change("interview", "confirmed")
     assert should_change("interview", "rejected")
-    assert label_to_status("🎤 Интервью") == "interview"
+    assert label_to_status("🎤 Interview") == "interview" and label_to_status("interview") == "interview"
+    assert label_to_status("Applied") == "applied" and label_to_status("no response") == "no_response"
+    assert label_to_status("something else") == ""
 
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
@@ -103,14 +105,14 @@ def test_german_ad_rules():
 def test_docs_label_and_cover_letter():
     from jobradar.ai import _enforce_blockers
     from jobradar.telegram_ui import docs_label, docs_request
-    r = {"cover_letter": "required", "how_to_apply": "CV и 3 предложения; сопроводительного письма не нужно",
+    r = {"cover_letter": "required", "how_to_apply": "CV and 3 sentences; a cover letter is not needed",
          "apply_docs": ["cv", "short_motivation"], "blockers": []}
     _enforce_blockers(r, "No portals, no cover-letter essays. Send us your CV and three sentences on why you.")
     assert r["cover_letter"] == "not_wanted"
     job = {"analysis": r}
-    assert docs_label(job) == "CV + короткий текст"
-    assert "НЕ нужен" in docs_request(job)
-    assert docs_label({"analysis": {"cover_letter": "not_mentioned", "apply_docs": []}}) == "CV + письмо"
+    assert docs_label(job) == "CV + short text"
+    assert "NO cover letter" in docs_request(job)
+    assert docs_label({"analysis": {"cover_letter": "not_mentioned", "apply_docs": []}}) == "CV + letter"
 
 
 def test_short_motivation_is_not_cover_letter():
@@ -118,7 +120,7 @@ def test_short_motivation_is_not_cover_letter():
     from jobradar.telegram_ui import docs_label
     r = {"cover_letter": "required", "apply_docs": ["cv", "short_motivation"], "how_to_apply": "", "blockers": []}
     _enforce_blockers(r, "If you are interested, send us your resume along with a few sentences explaining your interest.")
-    assert r["cover_letter"] == "not_mentioned" and docs_label({"analysis": r}) == "CV + короткий текст"
+    assert r["cover_letter"] == "not_mentioned" and docs_label({"analysis": r}) == "CV + short text"
 
 
 def test_similar_dup_cross_source(tmp_path):
@@ -207,10 +209,10 @@ def test_blockers_need_proof():
 def test_hours_21_25_and_english_exemption():
     from jobradar.ai import _enforce_blockers
     from jobradar.util import weekly_hours_range
-    assert weekly_hours_range("25 ч/нед") == (25, 25)
+    assert weekly_hours_range("25 h/week") == (25, 25)
     assert weekly_hours_range("20–30 h") == (20, 30)
     assert weekly_hours_range("ab 30 Wochenstunden") == (30, 30)
-    r = {"blockers": [], "hours": "25 ч/нед", "hours_ok": "no", "risks": []}
+    r = {"blockers": [], "hours": "25 h/week", "hours_ok": "no", "risks": []}
     _enforce_blockers(r, "We offer 25 hours per week in Vienna.")
     assert r["blockers"] == [] and r["hours_ok"] == "yes" and r["risks"][0].startswith("⏱")
     de = ("Wir suchen für unser Team in Wien eine engagierte Persönlichkeit. Deine Aufgaben sind die Analyse von Daten "
@@ -218,7 +220,7 @@ def test_hours_21_25_and_english_exemption():
           "Erfahrung mit Excel. Wir bieten dir ein junges Team und eine faire Bezahlung. ") * 3
     r = {"ad_language": "de", "german": "unclear", "german_evidence": "", "blockers": [], "risks": []}
     _enforce_blockers(r, de, {"company": "Bitpanda GmbH", "description": de}, [r"bitpanda"])
-    assert r["blockers"] == [] and "английский" in r["risks"][0]
+    assert r["blockers"] == [] and "working language is English" in r["risks"][0]
     r = {"ad_language": "de", "german": "unclear", "german_evidence": "", "blockers": [], "risks": []}
     _enforce_blockers(r, de, {"company": "Wiener Linien", "description": de}, [r"bitpanda"])
     assert r["blockers"] == ["german_ad"]
@@ -262,7 +264,7 @@ def test_german_levels_shared_and_soft():
 
 
 def test_fulltime_proof_2026_11_01():
-    """Full-time jobs that slipped through as «ИИ заподозрил … проверь сам» (30.10–01.11.2026)."""
+    """Full-time jobs that slipped through as "the AI suspected … check it yourself" (30.10–01.11.2026)."""
     from datetime import date
     from jobradar.ai import verify_blockers
     today = date(2026, 11, 1)
@@ -309,9 +311,9 @@ def test_fulltime_proof_2026_11_01():
     # the model writes > 25 h in "hours" without claiming the blocker: the code checks the ad itself
     job = {"id": 1, "title": "Office Manager", "company": "X", "location": "Wien",
            "description": "Anstellung in Vollzeit (40 Stunden).", "meta": {}}
-    r = {"blockers": [], "hours": "40 ч/нед", "evidence": []}
+    r = {"blockers": [], "hours": "40 h/week", "evidence": []}
     assert verify_blockers(r, job, today) == [] and r["blockers"] == ["fulltime_only"]
-    r = {"blockers": [], "hours": "40 ч/нед", "evidence": []}
+    r = {"blockers": [], "hours": "40 h/week", "evidence": []}
     job["description"] = "Teilzeit möglich, 20 Stunden pro Woche."
     assert verify_blockers(r, job, today) == [] and r["blockers"] == []
 

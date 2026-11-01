@@ -9,15 +9,15 @@ from .util import company_key, iso, local, now_utc, parse_iso
 log = logging.getLogger("jobradar.tracker")
 
 STATUS_LABEL = {
-    "saved": "⭐ Сохранено",
-    "applied": "✅ Подался",
-    "confirmed": "📨 Подтверждено",
-    "assessment": "📝 Тест/задание",
-    "interview": "🎤 Интервью",
-    "offer": "🏆 Оффер",
-    "rejected": "❌ Отказ",
-    "no_response": "🔕 Нет ответа",
-    "withdrawn": "↩️ Отозвал",
+    "saved": "⭐ Saved",
+    "applied": "✅ Applied",
+    "confirmed": "📨 Confirmed",
+    "assessment": "📝 Test / task",
+    "interview": "🎤 Interview",
+    "offer": "🏆 Offer",
+    "rejected": "❌ Rejected",
+    "no_response": "🔕 No response",
+    "withdrawn": "↩️ Withdrawn",
 }
 LABEL_STATUS = {v: k for k, v in STATUS_LABEL.items()}
 # order = how far the application got (never move backwards automatically)
@@ -35,14 +35,16 @@ EMAIL_TO_STATUS = {
 
 
 def label_to_status(label: str) -> str:
+    """Sheet label → status key ("✅ Applied" → "applied"). Tolerates a missing emoji, other case and the key itself;
+    returns "" for anything unknown (the caller then keeps the current status instead of storing garbage)."""
     label = (label or "").strip()
     if label in LABEL_STATUS:
         return LABEL_STATUS[label]
     low = label.lower()
     for k, v in STATUS_LABEL.items():
-        if v.split(" ", 1)[-1].lower() in low or k in low:
+        if v.split(" ", 1)[-1].lower() in low or k in low.replace(" ", "_"):
             return k
-    return low or "applied"
+    return ""
 
 
 def should_change(current: str | None, new: str) -> bool:
@@ -122,13 +124,13 @@ class Tracker:
         if note:
             row["notes"] = note
         if not app and extra.get("company"):
-            row.setdefault("source", "Письмо")
+            row.setdefault("source", "E-mail")
         await self.sheets.safe("upsert_tracker", {"row": row})
 
     async def remove_job_action(self, job: dict) -> None:
         tid = self.tracker_id_for_job(job["id"])
         if self.db.get_application(tid):
-            await self.set_status(tid, "withdrawn", note="Отменено в боте")
+            await self.set_status(tid, "withdrawn", note="Undone in the bot")
 
     def _default_followup(self, applied_at: str | None) -> str:
         """applied + followup_days, but never in the past (then: tomorrow 10:00 reminder run)."""
@@ -157,8 +159,8 @@ class Tracker:
             tid = str(r.get("tracker_id") or "")
             if not tid:
                 continue
-            status = label_to_status(str(r.get("status") or ""))
             app = self.db.get_application(tid)
+            status = label_to_status(str(r.get("status") or "")) or (app or {}).get("status") or "applied"
             fu = r.get("followup_due") or None
             if status in WAITING and not fu and (app or {}).get("followup_due"):
                 fu = app["followup_due"]  # empty cell in the sheet ≠ "cancel the reminder" (change the status for that)
@@ -200,6 +202,6 @@ class Tracker:
         cnt = int(app.get("followup_count") or 0) + 1
         due = iso(now_utc() + timedelta(days=self.followup_days)) if cnt < 2 else None
         self.db.upsert_application(tid, followup_count=cnt, followup_due=due)
-        row = {"tracker_id": tid, "notes": f"{local(now_utc()):%d.%m} — follow-up #{cnt} отправлен",
+        row = {"tracker_id": tid, "notes": f"{local(now_utc()):%d.%m} — follow-up #{cnt} sent",
                "followup_due": local(parse_iso(due)).strftime("%Y-%m-%d") if due else ""}
         await self.sheets.safe("upsert_tracker", {"row": row})

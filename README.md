@@ -11,9 +11,8 @@ Everything that is specific to that person lives in two private files, `config.y
 else is this repository. To use it for your own search, write your own two files and point the sources at your
 city ([docs/adapting.md](docs/adapting.md)).
 
-> **Status:** v1.0. It has run in production every day since October 2026. The Telegram interface and the AI's
-> summaries are in **Russian** (the original user's language), and the built-in sources are tuned for
-> **Vienna / Austria**. Translating the interface is the first item on the [roadmap](#roadmap).
+> **Status:** v1.1. It has run in production every day since October 2026. The built-in sources and language rules
+> are tuned for **Vienna / Austria**; [docs/adapting.md](docs/adapting.md) shows how to point it at another place.
 
 ---
 
@@ -116,7 +115,6 @@ docs/              documentation
 
 ## Roadmap
 
-- [ ] English Telegram interface and AI summaries (`general.language: en`), with Russian kept as an option
 - [ ] Ready presets for more cities (Berlin, Munich, Zurich, Amsterdam, London)
 - [ ] Web dashboard as an alternative to the Google Sheet
 - [ ] Docker image as an alternative to the systemd install

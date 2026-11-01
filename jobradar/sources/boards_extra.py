@@ -421,7 +421,7 @@ EXTRA_ADAPTERS = {
 }
 EXTRA_DETAILS = {"taleo": taleo_detail, "htmllist": page_detail, "bamboohr": bamboohr_detail, "breezy": page_detail,
                  "join": page_detail, "osce": page_detail}
-EXTRA_LABELS = {"unjobs": "UN Careers", "taleo": "Taleo", "lanteria": "Lanteria", "htmllist": "сайт",
+EXTRA_LABELS = {"unjobs": "UN Careers", "taleo": "Taleo", "lanteria": "Lanteria", "htmllist": "site",
                 "teamtailor": "Teamtailor", "bamboohr": "BambooHR", "breezy": "Breezy", "pinpoint": "Pinpoint",
                 "join": "JOIN", "osce": "OSCE"}
 EXTRA_PATTERNS = [

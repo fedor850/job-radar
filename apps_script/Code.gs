@@ -1,6 +1,6 @@
 /**
  * Job Radar — bridge between the bot and Google (tracker spreadsheet, Gmail, Calendar).
- * Full guide: docs/google-bridge.md. The sheet and statuses are in Russian (the bot's UI language).
+ * Full guide: docs/google-bridge.md.
  *
  * Install (once):
  *  1) script.google.com → New project → replace Code.gs with this file → Save.
@@ -11,28 +11,34 @@
  */
 
 var SECRET = '__APPS_SCRIPT_SECRET__';           // shared secret with the bot (= APPS_SCRIPT_SECRET in secrets.env)
-var SHEET_NAME = 'Job Radar — трекер откликов';
+var SHEET_NAME = 'Job Radar — Application Tracker';
 var TZ = 'Europe/Vienna';
 
-var TRACKER = 'Отклики';
-var LOG = 'Лента';
-var DASH = 'Сводка';
+var TRACKER = 'Applications';
+var LOG = 'Feed';
+var DASH = 'Dashboard';
 
-var TRACKER_HEADERS = ['ID', 'Добавлено', 'Статус', 'Компания', 'Должность', 'Оценка', 'Локация', 'Часы',
-  'Зарплата (20 ч)', 'Источник', 'Ссылка для отклика', 'Объявление', 'Дата отклика', 'Follow-up',
-  'Последнее письмо', 'Контакт', 'Заметки'];
+var TRACKER_HEADERS = ['ID', 'Added', 'Status', 'Company', 'Title', 'Score', 'Location', 'Hours',
+  'Salary (pro-rated)', 'Source', 'Apply link', 'Job ad', 'Applied on', 'Follow-up',
+  'Last e-mail', 'Contact', 'Notes'];
 var TRACKER_KEYS = ['tracker_id', 'added', 'status', 'company', 'title', 'score', 'location', 'hours',
   'salary', 'source', 'apply_url', 'url', 'applied_at', 'followup_due', 'last_email', 'contact', 'notes'];
 
-var LOG_HEADERS = ['Дата', 'Оценка', 'Компания', 'Должность', 'Источник', 'Ссылка', 'Почему подходит', 'Риски', 'ID'];
+var LOG_HEADERS = ['Date', 'Score', 'Company', 'Title', 'Source', 'Link', 'Why it fits', 'Risks', 'ID'];
 
-var STATUSES = ['⭐ Сохранено', '✅ Подался', '📨 Подтверждено', '📝 Тест/задание', '🎤 Интервью', '🏆 Оффер',
-  '❌ Отказ', '🔕 Нет ответа', '↩️ Отозвал'];
+// must match STATUS_LABEL in jobradar/tracker.py
+var STATUSES = ['⭐ Saved', '✅ Applied', '📨 Confirmed', '📝 Test / task', '🎤 Interview', '🏆 Offer',
+  '❌ Rejected', '🔕 No response', '↩️ Withdrawn'];
 var STATUS_COLORS = {
-  '⭐ Сохранено': '#fff8e1', '✅ Подался': '#e3f2fd', '📨 Подтверждено': '#e8eaf6', '📝 Тест/задание': '#f3e5f5',
-  '🎤 Интервью': '#e8f5e9', '🏆 Оффер': '#c8e6c9', '❌ Отказ': '#ffebee', '🔕 Нет ответа': '#f5f5f5',
-  '↩️ Отозвал': '#eeeeee'
+  '⭐ Saved': '#fff8e1', '✅ Applied': '#e3f2fd', '📨 Confirmed': '#e8eaf6', '📝 Test / task': '#f3e5f5',
+  '🎤 Interview': '#e8f5e9', '🏆 Offer': '#c8e6c9', '❌ Rejected': '#ffebee', '🔕 No response': '#f5f5f5',
+  '↩️ Withdrawn': '#eeeeee'
 };
+
+// Optional one-time migration of a spreadsheet created by an older version with other sheet names / status labels:
+// {title: 'old spreadsheet title', sheets: {'old name': 'Applications' | 'Feed' | 'Dashboard'},
+//  statuses: {'old label': '✅ Applied', ...}}. Leave null for a new installation.
+var LEGACY = null;
 
 // ------------------------------------------------------------------ entry points
 
@@ -82,12 +88,12 @@ function setup() {
   formatTracker_(tr);
   formatLog_(lg);
   buildDashboard_(ss);
-  var def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Лист1');
+  var def = ss.getSheetByName('Sheet1');
   if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
   // touch Gmail & Calendar so that all permissions are requested at once
   GmailApp.search('newer_than:1d', 0, 1);
   CalendarApp.getDefaultCalendar().getName();
-  Logger.log('Таблица: ' + ss.getUrl());
+  Logger.log('Spreadsheet: ' + ss.getUrl());
   return {sheet_url: ss.getUrl()};
 }
 
@@ -95,12 +101,43 @@ function ss_() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('SHEET_ID');
   if (id) {
-    try { return SpreadsheetApp.openById(id); } catch (e) { /* recreate below */ }
+    var opened = null;
+    try { opened = SpreadsheetApp.openById(id); } catch (e) { /* recreate below */ }
+    if (opened) { migrateLegacy_(opened); return opened; }
   }
   var ss = SpreadsheetApp.create(SHEET_NAME);
   ss.setSpreadsheetTimeZone(TZ);
   props.setProperty('SHEET_ID', ss.getId());
   return ss;
+}
+
+function migrateLegacy_(ss) {
+  if (!LEGACY) return;
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('LEGACY_MIGRATED')) return;
+  var names = LEGACY.sheets || {};
+  for (var oldName in names) {
+    var sh = ss.getSheetByName(oldName);
+    if (sh && !ss.getSheetByName(names[oldName])) sh.setName(names[oldName]);
+    else if (sh && names[oldName] === DASH) ss.deleteSheet(sh);
+  }
+  var tr = ss.getSheetByName(TRACKER);
+  if (tr) {
+    tr.getRange(1, 1, 1, TRACKER_HEADERS.length).setValues([TRACKER_HEADERS]);
+    var map = LEGACY.statuses || {};
+    var n = tr.getLastRow() - 1;
+    if (n > 0) {
+      var col = tr.getRange(2, 3, n, 1);
+      var vals = col.getValues().map(function (r) { return [map[r[0]] || r[0]]; });
+      col.setValues(vals);
+    }
+    formatTracker_(tr);
+  }
+  var lg = ss.getSheetByName(LOG);
+  if (lg) lg.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]);
+  buildDashboard_(ss);
+  if (LEGACY.title && ss.getName() === LEGACY.title) ss.rename(SHEET_NAME);
+  props.setProperty('LEGACY_MIGRATED', new Date().toISOString());
 }
 
 function sheet_(ss, name, headers) {
@@ -146,32 +183,33 @@ function buildDashboard_(ss) {
   sh.clear();
   var T = "'" + TRACKER + "'";
   var L = "'" + LOG + "'";
+  var cnt = function (label) { return '=COUNTIF(' + T + '!C:C,"' + label + '")'; };
   var rows = [
-    ['Job Radar — сводка', ''],
+    ['Job Radar — dashboard', ''],
     ['', ''],
-    ['Воронка откликов', 'Кол-во'],
-    ['⭐ Сохранено', '=COUNTIF(' + T + '!C:C,"⭐ Сохранено")'],
-    ['Откликов всего', '=COUNTA(' + T + '!C2:C)-COUNTIF(' + T + '!C:C,"⭐ Сохранено")'],
-    ['📨 Подтверждено', '=COUNTIF(' + T + '!C:C,"📨 Подтверждено")'],
-    ['📝 Тест/задание', '=COUNTIF(' + T + '!C:C,"📝 Тест/задание")'],
-    ['🎤 Интервью', '=COUNTIF(' + T + '!C:C,"🎤 Интервью")'],
-    ['🏆 Оффер', '=COUNTIF(' + T + '!C:C,"🏆 Оффер")'],
-    ['❌ Отказ', '=COUNTIF(' + T + '!C:C,"❌ Отказ")'],
-    ['🔕 Нет ответа', '=COUNTIF(' + T + '!C:C,"🔕 Нет ответа")'],
-    ['Доля ответов (тест/интервью/оффер/отказ)', '=IFERROR((B7+B8+B9+B10)/B5,0)'],
-    ['Доля приглашений (тест/интервью/оффер)', '=IFERROR((B7+B8+B9)/B5,0)'],
+    ['Application funnel', 'Count'],
+    [STATUSES[0], cnt(STATUSES[0])],
+    ['Applications in total', '=COUNTA(' + T + '!C2:C)-COUNTIF(' + T + '!C:C,"' + STATUSES[0] + '")'],
+    [STATUSES[2], cnt(STATUSES[2])],
+    [STATUSES[3], cnt(STATUSES[3])],
+    [STATUSES[4], cnt(STATUSES[4])],
+    [STATUSES[5], cnt(STATUSES[5])],
+    [STATUSES[6], cnt(STATUSES[6])],
+    [STATUSES[7], cnt(STATUSES[7])],
+    ['Reply rate (test / interview / offer / rejection)', '=IFERROR((B7+B8+B9+B10)/B5,0)'],
+    ['Invitation rate (test / interview / offer)', '=IFERROR((B7+B8+B9)/B5,0)'],
     ['', ''],
-    ['Активность', ''],
-    ['Откликов за 7 дней', '=COUNTIFS(' + T + '!M:M,">="&(TODAY()-7))'],
-    ['Откликов за 30 дней', '=COUNTIFS(' + T + '!M:M,">="&(TODAY()-30))'],
-    ['Вакансий прислано за 7 дней', '=COUNTIFS(' + L + '!A:A,">="&(TODAY()-7))'],
-    ['Вакансий прислано всего', '=COUNTA(' + L + '!A2:A)'],
+    ['Activity', ''],
+    ['Applications in the last 7 days', '=COUNTIFS(' + T + '!M:M,">="&(TODAY()-7))'],
+    ['Applications in the last 30 days', '=COUNTIFS(' + T + '!M:M,">="&(TODAY()-30))'],
+    ['Jobs sent in the last 7 days', '=COUNTIFS(' + L + '!A:A,">="&(TODAY()-7))'],
+    ['Jobs sent in total', '=COUNTA(' + L + '!A2:A)'],
     ['', ''],
-    ['Вакансии по источникам', '']
+    ['Jobs by source', '']
   ];
   sh.getRange(1, 1, rows.length, 2).setValues(rows);
   sh.getRange(rows.length + 1, 1).setFormula(
-    '=IFERROR(QUERY(' + L + '!A:E,"select E, count(A) where E is not null group by E order by count(A) desc label count(A) \'Вакансий\'",1),"")');
+    '=IFERROR(QUERY(' + L + '!A:E,"select E, count(A) where E is not null group by E order by count(A) desc label count(A) \'Jobs\'",1),"")');
   sh.getRange('A1').setFontSize(16).setFontWeight('bold');
   sh.getRange('A3:B3').setFontWeight('bold').setBackground('#eceff1');
   sh.getRange('A15:B15').setFontWeight('bold').setBackground('#eceff1');
@@ -303,7 +341,7 @@ function createEvent_(req) {
   var start = new Date(req.start);
   if (isNaN(start.getTime())) throw new Error('bad start');
   var end = new Date(start.getTime() + (Number(req.minutes) || 45) * 60000);
-  var ev = CalendarApp.getDefaultCalendar().createEvent(req.title || 'Интервью', start, end, {
+  var ev = CalendarApp.getDefaultCalendar().createEvent(req.title || 'Interview', start, end, {
     location: req.location || '', description: req.description || ''
   });
   ev.addPopupReminder(60);

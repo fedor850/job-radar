@@ -9,33 +9,33 @@ from .sources.boards import board_label
 from .util import clip, esc, host_of, human_age, local, parse_iso
 
 GERMAN = {
-    "not_needed": "немецкий не нужен",
-    "plus": "немецкий — плюс",
-    "basic_b1": "немецкий B1 ок",
-    "b2": "⚠️ нужен немецкий B2",
-    "c1_fluent": "⛔ свободный немецкий",
-    "unclear": "немецкий: не указан",
+    "not_needed": "German not needed",
+    "plus": "German is a plus",
+    "basic_b1": "German B1 is fine",
+    "b2": "⚠️ German B2 required",
+    "c1_fluent": "⛔ fluent German",
+    "unclear": "German: not stated",
 }
-WORKPLACE = {"onsite": "офис", "hybrid": "гибрид", "remote": "удалённо", "unclear": ""}
+WORKPLACE = {"onsite": "on-site", "hybrid": "hybrid", "remote": "remote", "unclear": ""}
 ROLE = {
-    "internship": "стажировка",
-    "trainee": "трейни",
+    "internship": "internship",
+    "trainee": "trainee",
     "working_student": "working student",
-    "part_time": "частичная занятость",
+    "part_time": "part-time",
     "junior": "junior",
-    "full_time": "полная ставка",
-    "freelance": "фриланс",
+    "full_time": "full-time",
+    "freelance": "freelance",
     "other": "",
 }
 SKIP_REASONS = [
-    ("de", "🇩🇪 Немецкий"),
-    ("hours", "⏱ Часы"),
-    ("level", "🎓 Уровень"),
-    ("field", "🧭 Не моё"),
-    ("loc", "📍 Место"),
-    ("pay", "💶 Деньги"),
-    ("company", "🏢 Компания"),
-    ("other", "🤷 Другое"),
+    ("de", "🗣 Language"),
+    ("hours", "⏱ Hours"),
+    ("level", "🎓 Level"),
+    ("field", "🧭 Not my field"),
+    ("loc", "📍 Location"),
+    ("pay", "💶 Pay"),
+    ("company", "🏢 Company"),
+    ("other", "🤷 Other"),
 ]
 SKIP_REASON_TEXT = dict(SKIP_REASONS)
 SITE_LABELS: dict[str, str] = {}  # filled from config (sources.sites) at start-up
@@ -80,7 +80,7 @@ def source_label(job: dict) -> str:
         return SITE_LABELS[fam]
     if ":" not in src:
         return src
-    return f"сайт компании ({board_label(fam)})"
+    return f"company site ({board_label(fam)})"
 
 
 def render_job(job: dict, status_line: str = "") -> str:
@@ -109,22 +109,22 @@ def render_job(job: dict, status_line: str = "") -> str:
     if a.get("hours"):
         facts.append(f"⏱ {esc(clip(a['hours'], 40))}")
     if a.get("salary_20h_eur"):
-        facts.append(f"💶 ≈€{int(round(a['salary_20h_eur'])):,}/мес за {_ai.TARGET_H} ч".replace(",", " "))
+        facts.append(f"💶 ≈€{int(round(a['salary_20h_eur'])):,}/month for {_ai.TARGET_H} h")
     elif a.get("salary"):
         facts.append(f"💶 {esc(clip(a['salary'], 45))}")
     if facts:
         lines.append(" · ".join(facts))
 
     facts2 = []
-    lang = {"en": "🇬🇧 объявление на англ.", "de": "🇦🇹 объявление на нем.", "other": ""}.get(a.get("ad_language", ""), "")
+    lang = {"en": "🇬🇧 ad in English", "de": "🇩🇪 ad in German", "other": ""}.get(a.get("ad_language", ""), "")
     if lang:
         facts2.append(lang)
     if a.get("german"):
         facts2.append(GERMAN.get(a["german"], ""))
     if a.get("start"):
-        facts2.append(f"🗓 старт: {esc(clip(a['start'], 30))}")
+        facts2.append(f"🗓 start: {esc(clip(a['start'], 30))}")
     if a.get("deadline"):
-        facts2.append(f"⏳ до {esc(clip(a['deadline'], 25))}")
+        facts2.append(f"⏳ until {esc(clip(a['deadline'], 25))}")
     facts2 = [f for f in facts2 if f]
     if facts2:
         lines.append(" · ".join(facts2))
@@ -134,24 +134,24 @@ def render_job(job: dict, status_line: str = "") -> str:
 
     why = [w for w in (a.get("why") or []) if w][:3]
     if why:
-        lines.append("\n✅ <b>Почему подходит</b>")
+        lines.append("\n✅ <b>Why it fits</b>")
         lines += [f"• {esc(clip(w, 220))}" for w in why]
     risks = [r for r in (a.get("risks") or []) if r][:3]
     if risks:
-        lines.append("⚠️ <b>Риски</b>")
+        lines.append("⚠️ <b>Risks</b>")
         lines += [f"• {esc(clip(r, 200))}" for r in risks]
     missing = [m for m in (a.get("missing") or []) if m][:5]
     if missing:
-        lines.append(f"❔ <b>Не указано:</b> {esc(clip(', '.join(missing), 220))} — уточни при отклике")
+        lines.append(f"❔ <b>Not stated:</b> {esc(clip(', '.join(missing), 220))} — ask when applying")
     if a.get("how_to_apply"):
-        lines.append(f"📨 <b>Как подаваться:</b> {esc(clip(a['how_to_apply'], 200))}")
+        lines.append(f"📨 <b>How to apply:</b> {esc(clip(a['how_to_apply'], 200))}")
     if a.get("tip"):
         lines.append(f"💡 <i>{esc(clip(a['tip'], 220))}</i>")
 
     posted = parse_iso(job.get("posted_at") or "")
     tail = [f"🔗 {esc(source_label(job))}"]
     if posted:
-        tail.append(f"опубл. {human_age(posted)}")
+        tail.append(f"posted {human_age(posted)}")
     if meta.get("applicants"):
         tail.append(esc(clip(meta["applicants"], 40)))
     lines.append("\n" + " · ".join(tail))
@@ -162,10 +162,10 @@ def render_job(job: dict, status_line: str = "") -> str:
 def apply_button_label(url: str, job: dict) -> str:
     kind = classify_link(url)
     if kind == "company":
-        return "🚀 Откликнуться на сайте компании"
+        return "🚀 Apply on the company site"
     if kind == "linkedin":
-        return "🚀 Откликнуться в LinkedIn" + (" (Easy Apply)" if (job.get("meta") or {}).get("easy_apply") else "")
-    return f"🚀 Откликнуться ({host_of(url)})"
+        return "🚀 Apply on LinkedIn" + (" (Easy Apply)" if (job.get("meta") or {}).get("easy_apply") else "")
+    return f"🚀 Apply ({host_of(url)})"
 
 
 def job_keyboard(settings, job: dict, state: str = "new") -> InlineKeyboardMarkup:
@@ -176,34 +176,34 @@ def job_keyboard(settings, job: dict, state: str = "new") -> InlineKeyboardMarku
         rows.append([InlineKeyboardButton(apply_button_label(apply_url, job), url=apply_url)])
     extra = []
     if classify_link(apply_url or "") != "company":
-        extra.append(InlineKeyboardButton("🔎 Найти на сайте компании", url=google_search_url(job.get("company", ""), job.get("title", ""))))
+        extra.append(InlineKeyboardButton("🔎 Find on the company site", url=google_search_url(job.get("company", ""), job.get("title", ""))))
     if job.get("url") and job.get("url") != apply_url:
-        extra.append(InlineKeyboardButton("📄 Оригинал объявления", url=job["url"]))
+        extra.append(InlineKeyboardButton("📄 Original ad", url=job["url"]))
     if extra:
         rows.append(extra)
     refs = referral_links(settings, job.get("company", ""), job.get("company_linkedin", ""))
     rows.append([InlineKeyboardButton(t, url=u) for t, u in refs[:3]])
     if state == "new":
         rows.append([
-            InlineKeyboardButton("✅ Подался", callback_data=f"ap:{jid}"),
-            InlineKeyboardButton("⭐ Сохранить", callback_data=f"sv:{jid}"),
-            InlineKeyboardButton("🙅 Не интересно", callback_data=f"sk:{jid}"),
+            InlineKeyboardButton("✅ Applied", callback_data=f"ap:{jid}"),
+            InlineKeyboardButton("⭐ Save", callback_data=f"sv:{jid}"),
+            InlineKeyboardButton("🙅 Not interested", callback_data=f"sk:{jid}"),
         ])
     elif state == "saved":
         rows.append([
-            InlineKeyboardButton("✅ Подался", callback_data=f"ap:{jid}"),
-            InlineKeyboardButton("↩️ Убрать из сохранённых", callback_data=f"un:{jid}"),
+            InlineKeyboardButton("✅ Applied", callback_data=f"ap:{jid}"),
+            InlineKeyboardButton("↩️ Remove from saved", callback_data=f"un:{jid}"),
         ])
     elif state == "applied":
-        rows.append([InlineKeyboardButton("↩️ Отменить «Подался»", callback_data=f"un:{jid}")])
-    rows.append([InlineKeyboardButton(f"📋 Для Claude: {docs_label(job)}", callback_data=f"cl:{jid}")])
+        rows.append([InlineKeyboardButton("↩️ Undo “Applied”", callback_data=f"un:{jid}")])
+    rows.append([InlineKeyboardButton(f"📋 For Claude: {docs_label(job)}", callback_data=f"cl:{jid}")])
     return InlineKeyboardMarkup(rows)
 
 
 def skip_reasons_keyboard(jid: int) -> InlineKeyboardMarkup:
     btns = [InlineKeyboardButton(label, callback_data=f"sr:{jid}:{code}") for code, label in SKIP_REASONS]
     rows = [btns[i:i + 4] for i in range(0, len(btns), 4)]
-    rows.append([InlineKeyboardButton("↩️ Назад", callback_data=f"bk:{jid}")])
+    rows.append([InlineKeyboardButton("↩️ Back", callback_data=f"bk:{jid}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -216,27 +216,27 @@ def skipped_text(job: dict, reason_code: str) -> str:
 
 
 def skipped_keyboard(jid: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("↩️ Вернуть", callback_data=f"un:{jid}")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("↩️ Restore", callback_data=f"un:{jid}")]])
 
 
 def status_line(kind: str, when=None) -> str:
     t = local(when).strftime("%d.%m %H:%M") if when else ""
     return {
-        "applied": f"✅ <b>Подался</b> {t}",
-        "saved": f"⭐ <b>Сохранено</b> {t}",
+        "applied": f"✅ <b>Applied</b> {t}",
+        "saved": f"⭐ <b>Saved</b> {t}",
     }.get(kind, "")
 
 
 DOC_NAMES = {
-    "short_motivation": "короткий мотивационный текст",
-    "transcript": "выписка оценок (transcript)",
-    "certificates": "дипломы/сертификаты",
-    "references": "рекомендации / Arbeitszeugnisse",
-    "photo": "фото",
-    "portfolio": "портфолио",
-    "online_form": "онлайн-анкета",
-    "video": "видео",
-    "test_case": "тест/кейс",
+    "short_motivation": "short motivation text",
+    "transcript": "transcript of records",
+    "certificates": "diplomas / certificates",
+    "references": "references / Arbeitszeugnisse",
+    "photo": "photo",
+    "portfolio": "portfolio",
+    "online_form": "online form",
+    "video": "video",
+    "test_case": "test / case study",
 }
 
 
@@ -245,10 +245,10 @@ def docs_label(job: dict) -> str:
     cl = a.get("cover_letter") or "not_mentioned"
     short = "short_motivation" in (a.get("apply_docs") or [])
     if cl == "not_wanted":
-        return "CV + короткий текст" if short else "CV"
+        return "CV + short text" if short else "CV"
     if cl == "not_mentioned" and short:
-        return "CV + короткий текст"
-    return "CV + письмо"
+        return "CV + short text"
+    return "CV + letter"
 
 
 def docs_request(job: dict) -> str:
@@ -257,22 +257,22 @@ def docs_request(job: dict) -> str:
     cl = a.get("cover_letter") or "not_mentioned"
     docs = [d for d in (a.get("apply_docs") or []) if d not in ("cv", "cover_letter")]
     if cl == "not_wanted":
-        what = "только CV — cover letter НЕ нужен (так сказано в объявлении)"
+        what = "CV only — NO cover letter (the ad says so)"
         if "short_motivation" in docs:
-            what = "CV + короткий текст, который просят вместо письма — cover letter НЕ нужен (так сказано в объявлении)"
+            what = "CV + the short text the ad asks for instead of a letter — NO cover letter (the ad says so)"
     elif cl == "required":
-        what = "CV + cover letter (письмо обязательно по объявлению)"
+        what = "CV + cover letter (the ad requires a letter)"
     elif cl == "optional":
-        what = "CV + короткий cover letter (по объявлению письмо по желанию)"
+        what = "CV + a short cover letter (the ad says a letter is optional)"
     elif "short_motivation" in docs:
-        what = "CV + короткий мотивационный текст, который просят в объявлении (обычный cover letter не нужен)"
+        what = "CV + the short motivation text the ad asks for (no regular cover letter)"
     else:
-        what = "CV + cover letter (в объявлении не сказано, нужно ли письмо — сделай на всякий случай)"
+        what = "CV + cover letter (the ad does not say whether a letter is needed — make one to be safe)"
     extra = [DOC_NAMES[d] for d in docs if d in DOC_NAMES and d != "short_motivation"]
-    out = (f"Подготовь под эту вакансию: {what}. Работай по инструкциям проекта (сначала проверь fit и задай "
-           "вопросы, если нужно); формат и объём каждого документа — строго как просит объявление.")
+    out = (f"Prepare for this job: {what}. Follow the project instructions (check the fit first and ask "
+           "questions if needed); the format and length of every document exactly as the ad asks.")
     if extra:
-        out += " Ещё просят приложить: " + ", ".join(extra) + " — напомни мне, если чего-то не хватает."
+        out += " They also ask for: " + ", ".join(extra) + " — remind me if anything is missing."
     return out
 
 
@@ -283,32 +283,32 @@ def claude_export(job: dict, earlier: list[dict] | None = None) -> str:
         "",
         docs_request(job),
         "",
-        f"- Компания: {job.get('company')}",
-        f"- Локация: {job.get('location') or a.get('location') or 'не указано'}",
-        f"- Ссылка для отклика: {job.get('apply_url') or job.get('url')}",
-        f"- Источник: {source_label(job)} — {job.get('url')}",
-        f"- Оценка радара: {job.get('score')}/100",
+        f"- Company: {job.get('company')}",
+        f"- Location: {job.get('location') or a.get('location') or 'not stated'}",
+        f"- Apply link: {job.get('apply_url') or job.get('url')}",
+        f"- Source: {source_label(job)} — {job.get('url')}",
+        f"- Radar score: {job.get('score')}/100",
     ]
     if a.get("hours"):
-        lines.append(f"- Часы: {a['hours']}")
+        lines.append(f"- Hours: {a['hours']}")
     if a.get("salary"):
-        lines.append(f"- Зарплата: {a['salary']}")
+        lines.append(f"- Salary: {a['salary']}")
     if a.get("deadline"):
-        lines.append(f"- Дедлайн: {a['deadline']}")
+        lines.append(f"- Deadline: {a['deadline']}")
     if a.get("how_to_apply"):
-        lines.append(f"- Как подаваться (из объявления): {a['how_to_apply']}")
+        lines.append(f"- How to apply (from the ad): {a['how_to_apply']}")
     if earlier:
-        lines.append("- ⚠️ В трекере уже есть отклики в эту компанию: " + "; ".join(
+        lines.append("- ⚠️ The tracker already has applications to this company: " + "; ".join(
             f"{e.get('title') or '?'} — {e.get('status') or '?'}" + (f" ({str(e.get('applied_at'))[:10]})"
                                                                     if e.get("applied_at") else "")
-            for e in earlier[:5]) + " — не противоречь им в документах.")
+            for e in earlier[:5]) + " — do not contradict them in the documents.")
     if a.get("why"):
-        lines += ["", "## Почему подходит (оценка радара)"] + [f"- {w}" for w in a["why"]]
+        lines += ["", "## Why it fits (radar's assessment)"] + [f"- {w}" for w in a["why"]]
     if a.get("risks"):
-        lines += ["", "## Риски"] + [f"- {r}" for r in a["risks"]]
+        lines += ["", "## Risks"] + [f"- {r}" for r in a["risks"]]
     if a.get("missing"):
-        lines += ["", "## Не указано в объявлении"] + [f"- {m}" for m in a["missing"]]
+        lines += ["", "## Not stated in the ad"] + [f"- {m}" for m in a["missing"]]
     if a.get("tip"):
-        lines += ["", f"Совет: {a['tip']}"]
-    lines += ["", "## Текст вакансии", "", job.get("description") or "(описание не получено — открой ссылку)"]
+        lines += ["", f"Tip: {a['tip']}"]
+    lines += ["", "## Job description", "", job.get("description") or "(description not available — open the link)"]
     return "\n".join(lines)

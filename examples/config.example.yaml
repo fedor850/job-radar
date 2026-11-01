@@ -42,9 +42,9 @@ ai:
   concurrency: 4
   feedback_examples: 20      # how many of your latest reactions are shown to the AI for calibration
   monthly_budget_usd: 10     # = your limit in the Anthropic console; the bot warns at 70% / forecast above the limit and at 90%
-  why_example: "B2B-продажи: план ≈€50k/мес выполнялся — прямо про требование «sales quota»"   # style example for the "why it fits" lines (AI output language is Russian)
+  why_example: "B2B sales: met a EUR 50k monthly target — matches the ad's sales-quota requirement"   # style example for the "why it fits" lines
   extra_scoring_rules:       # optional extra rules for the scoring prompt (inserted as is)
-    - 'Summer internships (Sommerpraktikum / Ferialpraktikum / summer analyst, start June–Sept 2027) are a priority: a far-future start date is never a risk or a reason to lower the score; mention "летняя стажировка 2027" in why when it is one. Hours/German/field rules still apply.'
+    - 'Summer internships (Sommerpraktikum / Ferialpraktikum / summer analyst, start June–Sept 2027) are a priority: a far-future start date is never a risk or a reason to lower the score; mention "summer internship 2027" in why when it is one. Hours/German/field rules still apply.'
 
 filters:
   min_score: 40              # notification threshold (change with /minscore)
@@ -88,7 +88,7 @@ snippet:
 
 referrals:
   linkedin_school_ids: ["15091531"]   # your universities' LinkedIn IDs (alumni buttons); 15091531 = WU Vienna
-  alumni_label: Выпускники WU   # button text ("Alumni")
+  alumni_label: WU alumni   # button text
 
 tracker:
   followup_days: 7
@@ -146,8 +146,7 @@ sources:
       - {sweep: true, keywords: "finance", location: "Vienna, Vienna, Austria", distance: 25}
       - {sweep: true, keywords: "consulting", location: "Vienna, Vienna, Austria", distance: 25}
       - {sweep: true, keywords: "operations", location: "Vienna, Vienna, Austria", distance: 25}
-      - {sweep: true, keywords: "polish", location: "Vienna, Vienna, Austria", distance: 25}
-      - {sweep: true, keywords: "russian", location: "Vienna, Vienna, Austria", distance: 25}
+      - {sweep: true, keywords: "spanish", location: "Vienna, Vienna, Austria", distance: 25}   # your languages
       - {sweep: true, keywords: "CEE", location: "Vienna, Vienna, Austria", distance: 25}
       - {sweep: true, keywords: "english", location: "Vienna, Vienna, Austria", distance: 25}
       - {sweep: true, keywords: "data analyst", location: "Vienna, Vienna, Austria", distance: 25}
