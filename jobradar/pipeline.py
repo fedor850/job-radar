@@ -15,7 +15,8 @@ from .ai import RU_BLOCKER, triage_verdict
 from .links import best_link, classify_link, guess_ats_link, link_rank, match_in_db
 from .models import RawJob
 from .sources.boards import detect_board
-from .sources.linkedin import LinkedInBlocked, LinkedInSource
+from .sources.linkedin import LinkedInBlocked
+from .sources.linkedin import LinkedInSource
 from .sources.original import fetch_posting, find_original, has_student_signal
 from .util import company_key, norm_title, fingerprint, iso, local, now_utc, parse_iso
 

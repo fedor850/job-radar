@@ -1,0 +1,3 @@
+# Gitleaks false positives (fingerprint = commit:file:rule:line)
+# "from .sources.linkedin import LinkedInBlocked, LinkedInSource" matched the linkedin-client-id rule
+8a5732188ed5e84dfbc59f4ea18cb665ae4ee215:jobradar/pipeline.py:linkedin-client-id:18
