@@ -1,0 +1,27 @@
+[Unit]
+Description=Job Radar — job alerts bot
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=jobradar
+Group=jobradar
+WorkingDirectory=/opt/jobradar/app
+Environment=JOBRADAR_DATA=/var/lib/jobradar
+Environment=JOBRADAR_SECRETS=/etc/jobradar/secrets.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/jobradar/ms-playwright
+ExecStart=/opt/jobradar/venv/bin/python -m jobradar
+Restart=always
+RestartSec=15
+# hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/jobradar
+
+[Install]
+WantedBy=multi-user.target

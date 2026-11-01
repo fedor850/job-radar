@@ -1,0 +1,339 @@
+# Austrian / Vienna start-ups & scale-ups
+Ourz
+Kiweno
+Medicus AI
+XUND
+Platomics
+Symptoma
+Allcyte
+Hookipa
+Themis
+Marinomed
+Apeiron
+Leftshift One
+Cloudflight
+Viesure
+Netconomy
+Catalysts
+Bitmovin
+Ondewo
+Kontist
+Fluctuo
+Rideshare
+Kaleido AI
+Nuki
+Eloomi
+Byrd
+Ankorstore
+Swat.io
+Codeflügel
+Workflow Analytics
+Fairmas
+Factorial
+Schoolfox
+Studo
+Sclable
+Iteratec
+Bitsy
+Wolf Theiss
+LeitnerLeitner
+Carlsberg Austria
+Ankerbrot
+Durst
+Prisma
+Usersnap
+Linemetrics
+Hello Again
+Parkpocket
+Bluetec
+Codecool
+Dexpaq
+Twaice
+Hello Fresh
+Ecoduna
+Kern Tec
+Planet A Foods
+Revo Foods
+Rebel Meat
+Hydrogrid
+Enerox
+Wien Energie
+Fronius
+Kreisel
+Easelink
+Smatrics
+Neoom
+Gaiamare
+Fiskaly
+Bitpanda Technology Solutions
+Blockpit
+Coinpanion
+Hokify
+Zoomsquare
+ImmoScout24
+Immowelt
+Findmyhome
+Propster
+Planradar
+Exporo
+Brickwise
+Rendity
+Dagobertinvest
+Conda
+Finnest
+Bluecode
+Unzer
+Payolution
+Paysafecard
+Paysafe
+Skrill
+Wirecard CEE
+Hello Bank
+Dadat
+Brokerjet
+Flatex
+Smartbroker
+Erste Asset Management
+Raiffeisen Capital Management
+Spängler
+Schelhammer
+Hypo Noe
+Volksbank Wien
+Bank99
+Kommunalkredit
+Oesterreichische Kontrollbank
+Austria Wirtschaftsservice
+FFG
+Wirtschaftsagentur Wien
+Austrian Business Agency
+Vienna Business Agency
+Wiener Stadtwerke
+Wiener Netze
+Wiener Linien
+Flughafen Wien
+Austrian Airlines
+Lauda
+Eurowings
+ÖBB
+Westbahn
+Post AG
+DPD Austria
+GLS Austria
+Quehenberger
+Lagermax
+Schachinger
+Hödlmayr
+Cargo Center Graz
+Wienerberger
+Lenzing
+Agrana
+Manner
+Julius Meinl
+Vöslauer
+Spitz
+Almdudler
+Rauch
+Pfanner
+Kotanyi
+Hofer
+Penny
+Billa
+Interspar
+MediaMarkt Austria
+XXXLutz
+Kika Leiner
+Thalia
+Libro
+Hervis
+Intersport
+Bipa
+Douglas Austria
+Marionnaud
+Fussl
+Peek & Cloppenburg
+Palmers
+Wolford
+Riedel
+Lobmeyr
+Swarovski Optik
+Doka
+Umdasch
+Kapsch BusinessCom
+Kapsch TrafficCom
+Frequentis
+Fabasoft
+SER
+BMD
+Raiffeisen Informatik
+Accenture Austria
+Atos Austria
+NTT Data Austria
+S&T
+Kontron
+Bechtle Austria
+ACP
+Cancom
+Nagarro
+Endava
+Epam
+Luxoft
+Globallogic
+Dynatrace
+Tricentis
+Anyline
+Adverity
+Celonis
+Runtastic
+Shpock
+Willhaben
+Kununu
+Karriere.at
+StepStone Austria
+Hokify
+Instahelp
+TourRadar
+Holidu
+Checkfelix
+Kayak
+Booking Holdings
+Trivago
+Hotelplan
+Tui Austria
+Ruefa
+Verkehrsbüro
+Austria Trend Hotels
+Motel One
+Meininger
+Wombats
+A&O Hostels
+25hours Hotels
+Sacher
+Do & Co
+Gourmet
+Eurest
+Sodexo Austria
+ISS Austria
+Securitas
+G4S
+Manpower Austria
+Adecco Austria
+Randstad Austria
+Hays Austria
+Michael Page Austria
+Robert Walters
+Trenkwalder
+Iventa
+Kienbaum
+Spencer Stuart
+Egon Zehnder
+Korn Ferry
+Mercuri Urval
+Hill International
+Pedersen & Partners
+Contrast EY-Parthenon
+Strategy&
+Invest Unternehmensbeteiligungs AG
+EFS Consulting
+ICG Integrated Consulting Group
+Cubus
+Infront Consulting
+Accenture Song
+Publicis Austria
+Wien Nord
+Jung von Matt Donau
+Demner Merlicek
+Mindshare Austria
+GroupM Austria
+OMD Austria
+Havas Austria
+Ogilvy Austria
+TBWA Wien
+Serviceplan Austria
+Mediaplus
+Dentsu Austria
+Media.at
+Goldbach Austria
+Russmedia
+Styria Media
+Mediaprint
+Kurier
+Der Standard
+Die Presse
+ORF
+ProSiebenSat.1 Puls 4
+ServusTV
+Red Bull Media House
+Sky Österreich
+A1 Telekom Austria
+Magenta Telekom
+Drei
+Hutchison Drei
+Spusu
+HoT
+UPC Austria
+Liwest
+Telekom Austria Group
+Raiffeisen Bank International
+Erste Bank
+UniCredit Bank Austria
+BAWAG Group
+Easybank
+Santander Consumer Bank Austria
+TF Bank
+Bank Austria
+Oesterreichische Nationalbank
+FMA
+Wiener Börse
+CEESEG
+Uniqa Insurance
+Vienna Insurance Group
+Wiener Städtische
+Donau Versicherung
+Generali Austria
+Allianz Austria
+Zürich Versicherung
+Helvetia Austria
+Grawe
+Merkur Versicherung
+Muki
+Hdi Austria
+Coface Austria
+Atradius
+Euler Hermes
+Intrum Austria
+KSV1870
+Creditreform
+Dun & Bradstreet Austria
+Statistik Austria
+WIFO
+IHS Wien
+Agenda Austria
+EcoAustria
+Wiener Institut für Internationale Wirtschaftsvergleiche
+IIASA
+OPEC Fund
+ICMPD
+UNIDO
+IAEA
+OSCE
+CTBTO
+UNODC
+EBRD
+World Bank Vienna
+Austrian Development Agency
+Caritas
+Diakonie
+Rotes Kreuz
+SOS Kinderdorf
+Volkshilfe
+Light for the World
+Licht für die Welt
+WWF Austria
+Greenpeace Austria
+Global 2000
+Amnesty Austria
+Ärzte ohne Grenzen
+CARE Österreich
+Jugend Eine Welt
+Teach For Austria
+AIESEC Austria

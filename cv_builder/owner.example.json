@@ -1,0 +1,13 @@
+{
+  "name": "Alex Example",
+  "contact": "Vienna, Austria | alex.example@example.com | +43 000 0000000",
+  "file_prefix": "Alex_Example",
+  "rules": [
+    ["linkedin\\.com|linkedin\\s*:", "my LinkedIn URL must never be in the documents"],
+    ["user stor(y|ies)|acceptance criteria", "I never wrote user stories / acceptance criteria — do not claim it"]
+  ],
+  "warnings": [
+    ["\\bTableau\\b|\\bLBO\\b", "skill I do not have yet — only as 'ready to learn'"],
+    ["\\bgraded 5\\b", "grade '5' reads as 'fail' in Austria — convert the grade"]
+  ]
+}

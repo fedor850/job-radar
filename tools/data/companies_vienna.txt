@@ -1,0 +1,396 @@
+# Vienna / Austria employers with business roles (internationals, corporates, scale-ups, start-ups)
+# --- start-ups / scale-ups Vienna
+Anyline
+Adverity
+TourRadar
+Hokify
+Bikemap
+eyeson
+Byrd
+Fiskaly
+Craftworks
+Kaleido
+Holo
+MySugr
+Robo Wunderkind
+Ubiq
+Usersnap
+Blockpit
+Finabro
+Dexpaq
+Insurello
+Woom
+Gropyus
+Kickscale
+Storyclash
+Playbrush
+Tractive
+Dynatrace
+Tricentis
+Celonis
+Bitpanda
+N26
+Wefox
+Billie
+Payhawk
+Scalable Capital
+Trade Republic
+Revolut
+Wise
+Klarna
+Paysafe
+Paysafe Group
+Worldline
+Mollie
+SumUp
+Adyen
+Checkout.com
+Taxfix
+Holidu
+Flix
+FlixBus
+Bolt
+Uber
+Too Good To Go
+Lieferando
+Just Eat Takeaway
+Glovo
+HelloFresh
+Kayak
+Checkfelix
+Runtastic
+Shpock
+Willhaben
+Kununu
+New Work SE
+Xing
+Instahelp
+Herzensapp
+Ankorstore
+Shopify
+Contentful
+Personio
+Staffbase
+Pipedrive
+Miro
+Notion
+Zapier
+Deepl
+Celonis
+Mews
+Planradar
+Refurbed
+GoStudent
+Storyblok
+Bitmovin
+Prewave
+Nyra Health
+Fonio
+Magic Moments
+Wikifolio
+Froots
+Rubarb
+Kaufland
+Flink
+Vienna Insurance Group
+Cleverly
+Parkbob
+Swapfiets
+Hydrogrid
+Emporia
+Enpulse
+Neoom
+Glacier
+Carployee
+Smatrics
+Ecoplus
+Mostly AI
+MOSTLY AI
+Nuki
+Indoo.rs
+Bsurance
+Simplesurance
+Hepster
+Coinpanion
+Bitstamp
+Coinbase
+Kraken
+Ledger
+Nexo
+Wirex
+Viva Wallet
+Gocardless
+Tink
+Plaid
+Solaris
+Raisin
+Moonfare
+Neon
+Unzer
+Bluecode
+Payone
+Twint
+Barzahlen
+Viafintech
+Finleap
+Iconic
+Speedinvest
+Apex Ventures
+Uniqa Ventures
+Hansmen
+eQventure
+Fluidtime
+Blue Yonder
+Qualtrics
+Salesforce
+HubSpot
+Zendesk
+Atlassian
+Datadog
+Snowflake
+Databricks
+MongoDB
+Elastic
+Twilio
+Okta
+Workday
+SAP
+Oracle
+ServiceNow
+Adobe
+Autodesk
+Dropbox
+Spotify
+Booking
+Expedia
+Airbnb
+TikTok
+ByteDance
+Meta
+Google
+Amazon
+Microsoft
+Apple
+IBM
+Accenture
+Capgemini
+Cognizant
+Infosys
+TCS
+Wipro
+Atos
+Eviden
+T-Systems
+NTT Data
+DXC Technology
+Kyndryl
+Kapsch
+Frequentis
+Fabasoft
+Ingram Micro
+Cisco
+Dell
+HP
+HPE
+Lenovo
+Samsung
+Huawei
+Xiaomi
+Sony
+Canon
+Philips
+Siemens
+Siemens Healthineers
+Bosch
+ABB
+Schneider Electric
+Hitachi Energy
+Otis
+Schindler
+Kone
+Infineon
+NXP
+AMS Osram
+Zumtobel
+Wienerberger
+OMV
+Verbund
+Borealis
+Agrana
+Lenzing
+Andritz
+AVL
+Strabag
+Porr
+Uniqa
+Generali
+Allianz
+Zurich
+Helvetia
+Erste Group
+Erste Bank
+Raiffeisen
+BAWAG
+UniCredit
+Addiko
+Kommunalkredit
+Oesterreichische Kontrollbank
+Wiener Boerse
+Bank Gutmann
+Santander
+Amundi
+BlackRock
+Bloomberg
+Refinitiv
+LSEG
+S&P Global
+Moody's
+Fitch
+Morningstar
+MSCI
+Deloitte
+PwC
+EY
+KPMG
+BDO
+Grant Thornton
+Baker Tilly
+TPA
+LeitnerLeitner
+Mazars
+Forvis Mazars
+McKinsey
+BCG
+Bain
+Oliver Wyman
+Kearney
+Roland Berger
+Simon-Kucher
+Horvath
+BearingPoint
+Porsche Consulting
+Arthur D. Little
+Q_PERIOR
+Iventa
+Contrast
+Invest Unternehmensbeteiligungs
+Alvarez & Marsal
+FTI Consulting
+Houlihan Lokey
+Lazard
+Rothschild
+Marsh McLennan
+Mercer
+Aon
+WTW
+Gallagher
+Henkel
+Beiersdorf
+Unilever
+Procter & Gamble
+L'Oreal
+Nestle
+PepsiCo
+Coca-Cola HBC
+Red Bull
+Mondelez
+Mars
+JTI
+Philip Morris
+BAT
+Diageo
+Pernod Ricard
+Heineken
+Carlsberg
+Brau Union
+Danone
+Kraft Heinz
+Haleon
+Reckitt
+Kenvue
+Johnson & Johnson
+Novartis
+Sandoz
+Roche
+Pfizer
+Takeda
+Boehringer Ingelheim
+Bayer
+Merck
+MSD
+AstraZeneca
+GSK
+Sanofi
+AbbVie
+Amgen
+Gilead
+BMS
+Bristol Myers Squibb
+Novo Nordisk
+Baxter
+Octapharma
+Medtronic
+Thermo Fisher
+Siemens Energy
+Zeiss
+IKEA
+H&M
+Inditex
+Zalando
+About You
+MediaMarkt
+Ceconomy
+Spar
+Rewe
+Lidl
+Hofer
+dm
+Douglas
+Swarovski
+Hilti
+Lufthansa
+Austrian Airlines
+Wizz Air
+Ryanair
+Flughafen Wien
+DHL
+Kuehne Nagel
+DB Schenker
+DSV
+Gebrueder Weiss
+Cargo-Partner
+Rail Cargo
+Sixt
+Hertz
+Europcar
+Porsche Holding
+BMW
+Mercedes-Benz
+Volkswagen
+Stellantis
+Toyota
+Hyundai
+Magna
+Novomatic
+Casinos Austria
+Tipico
+bet-at-home
+Bwin
+Entain
+Flutter
+Superbet
+Admiral
+Greentube
+Miniclip
+King
+Ubisoft
+Bongfish
+UNIDO
+IAEA
+OSCE
+IIASA
+OPEC Fund
+ICMPD
+Teach For Austria
+WU Executive Academy
+Wirtschaftsuniversitaet Wien
