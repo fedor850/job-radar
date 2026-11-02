@@ -778,6 +778,26 @@ class JobRadar:
         log.info("scheduled: weekly report")
         await self.notifier.text("🗓 " + self.report_text(7))
 
+    async def check_boards(self) -> None:
+        """Company career sites are polled in bulk, so one dead site never raised an alarm: its jobs just stopped
+        arriving. Tell the user once when a site has failed for hours in a row (and again when it works)."""
+        need = int(self.settings.get("health.board_alert_fails", 30))  # ≈ 3 h at the 6-min polling interval
+        bad = {f"{b['kind']}:{b['key']}": b for b in self.db.failing_boards(need)}
+        known = set(self.db.kv_get("boards_alerted", []) or [])
+        fresh = [k for k in bad if k not in known]
+        if fresh:
+            lines = [f"• <b>{esc(bad[k].get('company') or k)}</b> ({esc(k)}): "
+                     f"<code>{esc(clip(bad[k].get('last_error') or '', 110))}</code>" for k in fresh[:12]]
+            more = f"\n…and {len(fresh) - 12} more" if len(fresh) > 12 else ""
+            await self.text("⚠️ These company career sites have not answered for hours — their new jobs are not "
+                            "reaching you:\n" + "\n".join(lines) + more +
+                            "\nI keep trying. If the address changed, fix it in config.yaml (sources.boards) or tell Claude.")
+        back = sorted(known - set(bad))
+        if back and known:
+            await self.text("✅ Company sites working again: " + ", ".join(esc(k) for k in back[:15]), silent=True)
+        if set(bad) != known:
+            self.db.kv_set("boards_alerted", sorted(bad))
+
     async def job_health(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Every 15 min. (1) A source whose run never finishes (hung request) updates no health row, so the
         normal 'source failed N times' alert never fires — detect it by the age of its last finished run.
@@ -814,6 +834,7 @@ class JobRadar:
             elif not z and self.db.kv_get(zkey):
                 self.db.kv_set(zkey, False)
                 await self.notifier.text(f"✅ Source <b>{esc(label)}</b> returns jobs again.", silent=True)
+        await self.check_boards()
         budget = float(self.settings.get("ai.monthly_budget_usd", 0) or 0)
         if budget > 0:
             loc = local(now)

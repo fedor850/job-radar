@@ -259,6 +259,12 @@ class DB:
             # disable learned boards that keep failing (e.g. wrong slug); seeds stay enabled
             self.execute("UPDATE boards SET enabled=0 WHERE id=? AND origin<>'seed' AND fails>=20", (board_id,))
 
+    def failing_boards(self, min_fails: int) -> list[dict]:
+        """Enabled company sites that have failed `min_fails` runs in a row (a dead slug, a site that moved, a block)."""
+        return [dict(r) for r in self.query(
+            "SELECT id,kind,key,company,fails,last_error FROM boards WHERE enabled=1 AND fails>=? ORDER BY fails DESC",
+            (min_fails,))]
+
     # ------------------------------------------------------------ health
     def health_run(self, name: str, ok: bool, items: int = 0, new: int = 0, error: str = "") -> dict:
         now = iso(now_utc())

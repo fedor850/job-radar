@@ -23,8 +23,14 @@ class KarriereSource(Source):
         pages = int(self.params.get("backfill_pages" if backfill else "pages", 15 if backfill else 3))
         loc = self.params.get("location_slug", "wien")
         out: dict[str, RawJob] = {}
+        self.begin()
         for page in range(1, pages + 1):
-            data = http.get_json(LIST_URL.format(loc=loc, page=page), headers=HEADERS).get("data", {})
+            try:
+                data = http.get_json(LIST_URL.format(loc=loc, page=page), headers=HEADERS,
+                                     retry_block=(403,)).get("data", {})
+            except Exception as e:  # noqa: BLE001 - page 1 is already in `out`: keep it
+                self.note_error(e, f"page {page}")
+                break
             items = (data.get("jobsSearchList", {}).get("activeItems") or {}).get("items") or []
             if not items:
                 break
@@ -53,7 +59,7 @@ class KarriereSource(Source):
                     needs_detail=True,
                 )
             time.sleep(random.uniform(0.5, 1.2))
-        return list(out.values())
+        return self.finish(list(out.values()))
 
     def fetch_detail(self, job: RawJob) -> RawJob:
         d = http.get_json(DETAIL_URL.format(id=job.external_id), headers=HEADERS).get("data", {})

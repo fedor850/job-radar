@@ -356,7 +356,7 @@ def rmk(key: str, params: dict, company: str) -> list[RawJob]:
         f"https://{host}{prefix}/search/?q=&locationsearch={loc}&sortColumn=referencedate&sortDirection=desc"
         f"&startrow=0"
     )
-    r = http.get(url)
+    r = http.get(url, retry_block=(403,))  # SuccessFactors sites answer 403 / 429 at random
     soup = BeautifulSoup(r.text, "lxml")
     out: dict[str, RawJob] = {}
     for row in soup.select("tr.data-row, li.job-tile, div.job-tile"):
@@ -408,7 +408,7 @@ def _parse_rmk_date(s: str) -> datetime | None:
 
 
 def rmk_detail(job: RawJob) -> RawJob:
-    r = http.get(job.url)
+    r = http.get(job.url, retry_block=(403,))
     soup = BeautifulSoup(r.text, "lxml")
     desc = soup.select_one("span.jobdescription, [itemprop='description'], .job-description, .jobDisplay")
     job.description = html_to_text(str(desc)) if desc else html_to_text(r.text, 8000)

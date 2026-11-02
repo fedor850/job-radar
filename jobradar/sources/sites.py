@@ -183,21 +183,32 @@ class SiteSource(Source):
         )
 
     def fetch(self, backfill: bool = False) -> list[RawJob]:
+        self.begin()
         links: dict[str, dict] = {}
+        pages_ok = 0
         for url in self._list_urls(backfill):
             try:
-                r = http.get(url, headers=HDR, ok=(200, 404))
-            except http.HttpError:
-                raise
+                # 202 / 403 from an anti-bot layer are random → one retry with a fresh session
+                r = http.get(url, headers=HDR, ok=(200, 404), retry_block=(202, 403))
+            except Exception as e:  # noqa: BLE001 - one bad list page must not lose the other pages
+                self.note_error(e, f"list page {url}")
+                time.sleep(random.uniform(0.6, 1.5))
+                continue
             if r.status_code == 200:
+                pages_ok += 1
                 for k, v in self._links(_text(r), url).items():
                     links.setdefault(k, v)
+            else:
+                pages_ok += 1  # 404 = the site answered
             time.sleep(random.uniform(0.6, 1.5))
+        if not pages_ok and self.errors:
+            raise self.errors[0]
         # this source returns only links it has not seen yet, so "0 jobs" usually means "nothing new";
         # the zero-yield health check looks at how many job links the list pages showed instead
         self.last_list_count = len(links)
         cap = int(self.params.get("max_details", 40))
         out: list[RawJob] = []
+        transient = 0
         for jid, info in links.items():
             if self.db is not None and self.db.job_exists(f"{self.name}:{jid}"):
                 continue
@@ -205,8 +216,15 @@ class SiteSource(Source):
                 break
             try:
                 job = self._detail(jid, info)
-            except http.HttpError:
-                job = None
+            except Exception as e:  # noqa: BLE001
+                # a timeout / 429 / 5xx says nothing about the ad itself: do NOT remember it as "dropped"
+                # (that would lose it for good) — it is simply fetched again on the next run
+                self.note_error(e, f"detail {info.get('url')}")
+                transient += 1
+                if transient >= 5:  # the site is struggling: stop hammering it, resume next run
+                    break
+                time.sleep(random.uniform(1.0, 2.5))
+                continue
             if job is None:
                 # remember irrelevant/removed links so we do not fetch them again
                 job = RawJob(source=self.name, external_id=str(jid), title=info.get("title") or "-", company="",

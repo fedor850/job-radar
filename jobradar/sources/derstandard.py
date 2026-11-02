@@ -27,7 +27,11 @@ class DerStandardSource(Source):
     label = "DER STANDARD Jobs"
 
     def _cards(self, url: str, out: dict[str, RawJob]) -> int:
-        r = http.get(url, headers=HDR, ok=(200, 404))
+        try:
+            r = http.get(url, headers=HDR, ok=(200, 404), retry_block=(403,))
+        except Exception as e:  # noqa: BLE001 - one keyword page failing must not lose the others
+            self.note_error(e, url)
+            return 0
         if r.status_code != 200:
             return 0
         soup = BeautifulSoup(r.text, "lxml")
@@ -61,11 +65,12 @@ class DerStandardSource(Source):
     def fetch(self, backfill: bool = False) -> list[RawJob]:
         loc = self.params.get("location_slug", "wien")
         out: dict[str, RawJob] = {}
+        self.begin()
         self._cards(f"{BASE}/p/l/{loc}", out)
         for kw in self.params.get("keywords") or DEFAULT_KEYWORDS:
             time.sleep(random.uniform(0.8, 1.6))
             self._cards(f"{BASE}/p/ls/{loc}/{kw}", out)
-        return list(out.values())
+        return self.finish(list(out.values()))
 
     def fetch_detail(self, job: RawJob) -> RawJob:
         r = http.get(job.url, headers=HDR, ok=(200, 404, 410))

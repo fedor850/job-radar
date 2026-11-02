@@ -58,6 +58,11 @@ def session() -> requests.Session:
     return s
 
 
+def reset_session() -> None:
+    """Drop this thread's session: the next request gets a new connection, cookies and a different User-Agent."""
+    _local.session = None
+
+
 def _wait_429(r: requests.Response) -> float | None:
     """Seconds to wait before retrying after a 429: the server's Retry-After if it is short, else 8–15 s.
     None = the server asks for a long pause → do not retry now."""
@@ -67,36 +72,85 @@ def _wait_429(r: requests.Response) -> float | None:
     return random.uniform(8, 15)
 
 
-def request(method: str, url: str, *, timeout: float = 25, ok=(200,), retry_429: int = 1,
-            **kw: Any) -> requests.Response:
-    """`retry_429`: how often a 429 is repeated after a short pause (rate limits are usually per request and
-    random; one patient retry saves most of them). LinkedIn passes 0: it has its own queue and pauses."""
-    for attempt in range(max(retry_429, 0) + 1):
+#: connection-level failures that usually vanish on the next try (timeouts, reset connections, half-read bodies)
+TRANSIENT_ERRORS = (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                    requests.exceptions.ChunkedEncodingError, requests.exceptions.ContentDecodingError)
+#: gateway / origin errors (also Cloudflare's 52x) — worth exactly one more try
+RETRY_5XX = frozenset({500, 502, 503, 504, 520, 521, 522, 523, 524})
+
+
+def request(method: str, url: str, *, timeout: float = 25, ok=(200,), retry_429: int = 1, retry_net: int = 1,
+            retry_5xx: int = 1, retry_block: tuple = (), **kw: Any) -> requests.Response:
+    """One HTTP request that survives the usual one-off failures of scraped sites.
+
+    retry_429  – how often a 429 is repeated after a short pause (rate limits are usually per request and random).
+                 LinkedIn passes 0: it has its own queue and pauses.
+    retry_net  – repeats after a timeout / dropped connection / half-read body.
+    retry_5xx  – repeats after a 5xx from a gateway or the origin (a restarting server).
+    retry_block – statuses such as 403 / 202 that anti-bot layers return at random: ONE repeat with a brand-new
+                 session (new User-Agent and cookies) after a pause. Not used for statuses listed in `ok`.
+    """
+    left = {"429": max(retry_429, 0), "net": max(retry_net, 0), "5xx": max(retry_5xx, 0),
+            "block": 1 if retry_block else 0}
+    while True:
         t0 = time.monotonic()
-        r = session().request(method, url, timeout=timeout, **kw)
+        try:
+            r = session().request(method, url, timeout=timeout, **kw)
+        except TRANSIENT_ERRORS as e:
+            if left["net"] <= 0:
+                raise
+            left["net"] -= 1
+            wait = random.uniform(2, 5)
+            log.info("%s for %s — retry in %.0f s", type(e).__name__, url, wait)
+            time.sleep(wait)
+            reset_session()
+            continue
         dt = time.monotonic() - t0
-        if r.status_code == 429 and 429 not in ok and attempt < retry_429:
+        sc = r.status_code
+        if sc in ok:
+            return r
+        if sc == 429 and left["429"] > 0:
+            left["429"] -= 1
             wait = _wait_429(r)
             if wait is not None:
-                log.info("HTTP 429 for %s — retry %d/%d in %.0f s", url, attempt + 1, retry_429, wait)
+                log.info("HTTP 429 for %s — retry in %.0f s", url, wait)
                 time.sleep(wait)
                 continue
-        break
-    if r.status_code not in ok:
-        log.debug("HTTP %s %s -> %s (%.1fs)", method, url, r.status_code, dt)
-        raise HttpError(r.status_code, url, r.text if r.text else "")
-    return r
+        elif sc in RETRY_5XX and left["5xx"] > 0:
+            left["5xx"] -= 1
+            wait = random.uniform(3, 7)
+            log.info("HTTP %s for %s — retry in %.0f s", sc, url, wait)
+            time.sleep(wait)
+            continue
+        elif sc in retry_block and left["block"] > 0:
+            left["block"] -= 1
+            wait = random.uniform(4, 9)
+            log.info("HTTP %s for %s — retry with a fresh session in %.0f s", sc, url, wait)
+            time.sleep(wait)
+            reset_session()
+            continue
+        log.debug("HTTP %s %s -> %s (%.1fs)", method, url, sc, dt)
+        raise HttpError(sc, url, r.text if r.text else "")
 
 
 def get(url: str, **kw: Any) -> requests.Response:
     return request("GET", url, **kw)
 
 
+def _json_twice(call) -> Any:
+    """An empty or HTML body instead of JSON is how overloaded APIs (Workday, JOIN) say 'not now' → one more try."""
+    try:
+        return call().json()
+    except ValueError:
+        time.sleep(random.uniform(3, 6))
+        return call().json()
+
+
 def get_json(url: str, **kw: Any) -> Any:
     headers = {"Accept": "application/json", **kw.pop("headers", {})}
-    return get(url, headers=headers, **kw).json()
+    return _json_twice(lambda: get(url, headers=headers, **kw))
 
 
 def post_json(url: str, payload: Any, **kw: Any) -> Any:
     headers = {"Accept": "application/json", "Content-Type": "application/json", **kw.pop("headers", {})}
-    return request("POST", url, json=payload, headers=headers, **kw).json()
+    return _json_twice(lambda: request("POST", url, json=payload, headers=headers, **kw))

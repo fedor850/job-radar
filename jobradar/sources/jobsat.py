@@ -37,8 +37,14 @@ class JobsAtSource(Source):
         loc = self.params.get("location_slug", "wien")
         kws = self.params.get("keywords") or DEFAULT_KEYWORDS
         out: dict[str, RawJob] = {}
+        self.begin()
         for kw in kws:
-            r = http.get(LIST.format(kw=quote(kw), loc=loc), headers=HDR, ok=(200, 404, 410))
+            try:
+                r = http.get(LIST.format(kw=quote(kw), loc=loc), headers=HDR, ok=(200, 404, 410), retry_block=(403,))
+            except Exception as e:  # noqa: BLE001 - the other keywords still count
+                self.note_error(e, f"keyword {kw}")
+                time.sleep(random.uniform(0.8, 1.8))
+                continue
             if r.status_code != 200:
                 continue
             soup = BeautifulSoup(r.text, "lxml")
@@ -80,7 +86,7 @@ class JobsAtSource(Source):
                     needs_detail=True,
                 )
             time.sleep(random.uniform(0.8, 1.8))
-        return list(out.values())
+        return self.finish(list(out.values()))
 
     def fetch_detail(self, job: RawJob) -> RawJob:
         r = http.get(job.url, headers=HDR, ok=(200, 410, 404))

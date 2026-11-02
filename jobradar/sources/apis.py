@@ -118,12 +118,17 @@ class JoobleSource(_ApiSource):
         if not self.key:
             return []
         out: dict[str, RawJob] = {}
+        self.begin()
         for kw in self._next_keywords(2):
             if not self._budget_ok(1):
                 break
-            data = http.post_json(f"https://{self.params.get('host', 'at.jooble.org')}/api/{self.key}",
-                                  {"keywords": kw, "location": self.params.get("location", "Vienna, Austria"),
-                                   "radius": "25", "page": "1"}, timeout=30)
+            try:
+                data = http.post_json(f"https://{self.params.get('host', 'at.jooble.org')}/api/{self.key}",
+                                      {"keywords": kw, "location": self.params.get("location", "Vienna, Austria"),
+                                       "radius": "25", "page": "1"}, timeout=30, retry_block=(403,))
+            except Exception as e:  # noqa: BLE001 - the second keyword may still work
+                self.note_error(e, f"keyword {kw}")
+                continue
             for j in data.get("jobs") or []:
                 jid = str(j.get("id") or j.get("link") or "")
                 if not jid or jid in out:
@@ -139,7 +144,7 @@ class JoobleSource(_ApiSource):
                           "origin": j.get("source") or ""},
                     needs_detail=True)
             time.sleep(random.uniform(0.3, 0.8))
-        return list(out.values())
+        return self.finish(list(out.values()))
 
 
 class CareerjetSource(_ApiSource):
@@ -154,15 +159,21 @@ class CareerjetSource(_ApiSource):
         hdr = {"Authorization": f"Basic {auth}", "Accept": "application/json",
                "Referer": self.params.get("referer", "")}  # Careerjet requires the referer registered for the key
         out: dict[str, RawJob] = {}
+        self.begin()
         for kw in self._next_keywords(4):
             for locale in self.params.get("locales") or ["de_AT", "en_GB"]:
                 if not self._budget_ok(1):
                     break
-                r = http.get("https://search.api.careerjet.net/v4/query", headers=hdr, timeout=30, params={
-                    "locale_code": locale, "keywords": kw, "location": self.params.get("location", "Wien"),
-                    "sort": "date", "page_size": 50, "page": 1, "fragment_size": 400,
-                    "user_ip": self.params.get("user_ip", ""), "user_agent": UA})  # your server's public IP
-                for j in (r.json().get("jobs") or []):
+                try:
+                    r = http.get("https://search.api.careerjet.net/v4/query", headers=hdr, timeout=30, params={
+                        "locale_code": locale, "keywords": kw, "location": self.params.get("location", "Wien"),
+                        "sort": "date", "page_size": 50, "page": 1, "fragment_size": 400,
+                        "user_ip": self.params.get("user_ip", ""), "user_agent": UA})  # your server's public IP
+                    jobs = r.json().get("jobs") or []
+                except Exception as e:  # noqa: BLE001 - one bad keyword / locale must not lose the rest
+                    self.note_error(e, f"{kw}/{locale}")
+                    continue
+                for j in jobs:
                     url = j.get("url") or ""
                     # jobviewtrack links change on every request → a stable id from title+company+location
                     jid = str(j.get("id") or "") or hashlib.sha1(
@@ -184,4 +195,4 @@ class CareerjetSource(_ApiSource):
                         description=html_to_text(j.get("description") or ""), posted_at=posted,
                         meta={"salary": j.get("salary") or "", "origin": j.get("site") or ""}, needs_detail=True)
                 time.sleep(random.uniform(0.3, 0.8))
-        return list(out.values())
+        return self.finish(list(out.values()))

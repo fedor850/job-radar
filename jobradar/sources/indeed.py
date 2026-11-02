@@ -30,6 +30,7 @@ class IndeedSource(Source):
         hours = int(self.params.get("backfill_hours" if backfill else "hours_old", 168 if backfill else 2))
         results = int(self.params.get("backfill_results" if backfill else "results_wanted", 400 if backfill else 80))
         out: dict[str, RawJob] = {}
+        self.begin()
         for q in self.params.get("queries") or [{"search_term": "", "location": "Wien"}]:
             gap = int(q.get("min_interval_sec", 0))
             qkey = q.get("search_term", "")
@@ -37,17 +38,21 @@ class IndeedSource(Source):
                 if time.time() - IndeedSource._last.get(qkey, 0) < gap:
                     continue
                 IndeedSource._last[qkey] = time.time()
-            df = scrape_jobs(
-                site_name=["indeed"],
-                search_term=q.get("search_term", ""),
-                location=q.get("location", "Wien"),
-                distance=int(q.get("distance", 25)),
-                results_wanted=int(q.get("results", results)) if not backfill else results,
-                hours_old=int(q.get("hours_old", hours)) if not backfill else hours,
-                country_indeed=self.params.get("country", "Austria"),
-                description_format="markdown",
-                verbose=0,
-            )
+            try:
+                df = scrape_jobs(
+                    site_name=["indeed"],
+                    search_term=q.get("search_term", ""),
+                    location=q.get("location", "Wien"),
+                    distance=int(q.get("distance", 25)),
+                    results_wanted=int(q.get("results", results)) if not backfill else results,
+                    hours_old=int(q.get("hours_old", hours)) if not backfill else hours,
+                    country_indeed=self.params.get("country", "Austria"),
+                    description_format="markdown",
+                    verbose=0,
+                )
+            except Exception as e:  # noqa: BLE001 - the other queries still count
+                self.note_error(e, f"query {q.get('search_term', '')!r}")
+                continue
             if df is None or df.empty:
                 continue
             for _, r in df.iterrows():
@@ -83,4 +88,4 @@ class IndeedSource(Source):
                         "company_url": _s(r.get("company_url_direct")),
                     },
                 )
-        return list(out.values())
+        return self.finish(list(out.values()))

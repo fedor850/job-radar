@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
@@ -21,44 +22,65 @@ class ZbpSource(Source):
     label = "WU ZBP Career Center"
 
     def fetch(self, backfill: bool = False) -> list[RawJob]:
+        self.begin()
         out: dict[str, RawJob] = {}
-        r = http.get(self.params.get("url", LIST))
-        self._parse(r.text, out)
+        try:
+            r = http.get(self.params.get("url", LIST))
+            self._parse(r.text, out)
+        except Exception as e:  # noqa: BLE001 - the browser below can still read the list
+            self.note_error(e, "plain list page")
         if not out and self.params.get("browser", True):
             # since ~25.10.2026 my.zbp.at renders the job list client-side (Blazor Server): plain HTML has no
             # job links → read the list with headless Chromium (detail pages are still server-rendered)
-            for html in self._browser_pages(int(self.params.get("browser_pages", 10 if backfill else 5))):
+            pages: list[str] = []
+            for attempt in (1, 2):
+                try:
+                    self._browser_pages(int(self.params.get("browser_pages", 10 if backfill else 5)), pages)
+                    break
+                except Exception as e:  # noqa: BLE001 - Chromium crashes / the Blazor circuit stalls now and then
+                    self.note_error(e, f"browser attempt {attempt}")
+                    if pages:  # got at least the first page(s): good enough, do not start over
+                        break
+                    time.sleep(5)
+            for html in pages:
                 self._parse(html, out)
-        return list(out.values())
+        return self.finish(list(out.values()))
 
-    def _browser_pages(self, max_pages: int) -> list[str]:
+    @staticmethod
+    def _first_link(pg) -> str | None:
+        """href of the first job link, or None while the list is being redrawn (eval_on_selector would raise)."""
+        return pg.evaluate("() => { const e = document.querySelector(\"a[href*='/jobs/detail']\"); "
+                           "return e ? e.href : null; }")
+
+    def _browser_pages(self, max_pages: int, pages: list[str]) -> None:
+        """Read up to `max_pages` list pages with headless Chromium; pages are appended to `pages` as they are
+        read, so an error on page 3 does not lose pages 1–2."""
         from playwright.sync_api import sync_playwright  # heavy, optional
 
-        pages: list[str] = []
         with sync_playwright() as p:
             browser = p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
             try:
                 pg = browser.new_page(locale="de-AT")
+                # not "networkidle": the Blazor circuit keeps a websocket open and the page never becomes idle
                 pg.goto(self.params.get("browser_url", "https://my.zbp.at/de/jobs/"), timeout=60000,
-                        wait_until="networkidle")
+                        wait_until="domcontentloaded")
                 for n in range(1, max_pages + 1):
-                    pg.wait_for_selector("a[href*='/jobs/detail']", timeout=30000)
+                    pg.wait_for_selector("a[href*='/jobs/detail']", timeout=45000)
                     pages.append(pg.content())
                     nxt = pg.locator("button", has_text=re.compile(rf"^\s*{n + 1}\s*$"))
                     if nxt.count() == 0:
                         break
-                    first = pg.eval_on_selector("a[href*='/jobs/detail']", "e => e.href")
+                    first = self._first_link(pg)
                     nxt.first.click()
                     for _ in range(30):  # wait (≤ 15 s) until the list actually shows the next page
                         pg.wait_for_timeout(500)
-                        cur = pg.eval_on_selector("a[href*='/jobs/detail']", "e => e.href")
+                        cur = self._first_link(pg)
                         if cur and cur != first:
                             break
                     else:
                         break
             finally:
                 browser.close()
-        return pages
 
     def _parse(self, html: str, out: dict[str, RawJob]) -> None:
         soup = BeautifulSoup(html, "lxml")

@@ -30,10 +30,17 @@ class WillhabenSource(Source):
         loc = self.params.get("location", "Wien")
         pages = int(self.params.get("backfill_pages" if backfill else "pages", 10 if backfill else 3))
         out: dict[str, RawJob] = {}
+        self.begin()
         for kw in self.params.get("keywords") or [""]:
             for page in range(1, pages + 1):
                 url = SEARCH.format(loc=loc, page=page, kw=f"&keyword={kw}" if kw else "")
-                data = (_next_data(http.get(url, headers=HDR).text).get("jobsSearchResultRoot") or {}).get("data") or {}
+                try:
+                    # willhaben answers 403 at random → one retry with a fresh session (new UA / cookies)
+                    html = http.get(url, headers=HDR, retry_block=(403,)).text
+                    data = (_next_data(html).get("jobsSearchResultRoot") or {}).get("data") or {}
+                except Exception as e:  # noqa: BLE001 - keep the pages already read
+                    self.note_error(e, f"page {page}")
+                    break
                 entries = data.get("entries") or []
                 for e in entries:
                     jid = str(e.get("id") or "")
@@ -58,7 +65,7 @@ class WillhabenSource(Source):
                 if not entries:
                     break
                 time.sleep(random.uniform(0.8, 1.6))
-        return list(out.values())
+        return self.finish(list(out.values()))
 
     def fetch_detail(self, job: RawJob) -> RawJob:
         r = http.get(job.url, headers=HDR, ok=(200, 404, 410))

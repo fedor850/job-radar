@@ -522,15 +522,22 @@ class Pipeline:
 
     # ------------------------------------------------------------------ maintenance
     async def retry_errors(self) -> int:
-        """Re-evaluate jobs that failed (e.g. API outage) within the last 2 days, max 3 attempts each."""
+        """Re-evaluate jobs that failed (site hiccup, API outage) within the last 4 days.
+
+        A job whose page could not be opened used to get 3 tries in ~15 minutes and was then written off for good —
+        exactly when a site is down for an hour. Now: up to 8 tries with growing gaps (5, 10, 20, 40, 80, 160 min…),
+        i.e. the ad survives an outage of several hours. Jobs that wait for the Claude API are not counted."""
         since = iso(now_utc() - timedelta(days=4))
         rows = self.db.query(
-            "SELECT * FROM jobs WHERE stage IN ('error','queued') AND first_seen>=? AND updated<=? ORDER BY id LIMIT 40",
+            "SELECT * FROM jobs WHERE stage IN ('error','queued') AND first_seen>=? AND updated<=? ORDER BY id LIMIT 300",
             (since, iso(now_utc() - timedelta(minutes=5))),
         )
         n = 0
+        tried = 0
         li_cooling = time.time() < LinkedInSource.cooldown_until
         for row in rows:
+            if tried >= 40:
+                break
             job = self.db.row_to_job(row)
             if job["source"] == "linkedin" and li_cooling:
                 continue  # LinkedIn is throttled: wait, do not spend an attempt (and an AI triage call)
@@ -541,10 +548,15 @@ class Pipeline:
                     continue
             else:
                 attempts = int(meta.get("attempts", 0)) + 1
-                if attempts > (12 if job["source"] == "linkedin" else 3):
+                if attempts > (12 if job["source"] == "linkedin" else 8):
                     self.db.update_job(job["id"], stage="failed")
                     continue
+                gap = timedelta(minutes=min(5 * 2 ** max(attempts - 2, 0), 180)) if job["source"] != "linkedin" \
+                    else timedelta(minutes=5)
+                if (parse_iso(job.get("updated")) or now_utc()) > now_utc() - gap:
+                    continue  # not yet: waiting out the back-off, no attempt is spent
                 meta["attempts"] = attempts
+            tried += 1
             self.db.update_job(job["id"], meta=meta, stage="queued")
             raw = RawJob(
                 source=job["source"], external_id=job["external_id"], title=job["title"], company=job["company"],

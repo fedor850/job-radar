@@ -98,7 +98,7 @@ class LinkedInSource(Source):
                 if wait > 0:
                     time.sleep(wait)
                 try:
-                    r = http.get(url, ok=ok, headers={"Accept": "text/html"}, retry_429=0)
+                    r = http.get(url, ok=ok, headers={"Accept": "text/html"}, retry_429=0, retry_block=())
                 except http.HttpError as e:
                     if e.status not in _THROTTLE:
                         self._pace()

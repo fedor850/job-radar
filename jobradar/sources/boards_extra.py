@@ -17,7 +17,9 @@ from __future__ import annotations
 import hashlib
 import html as htmllib
 import json
+import random
 import re
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -347,16 +349,35 @@ def pinpoint(key: str, params: dict, company: str) -> list[RawJob]:
 
 # ---------------------------------------------------------------- JOIN
 
+_JOIN_IDS: dict[str, tuple] = {}
+
+
+def _join_company(next_data: dict) -> dict:
+    """The company record inside JOIN's page data. The layout changed in autumn 2026 (pageProps.initialState.company →
+    pageProps.pageData.company), so look in every known place before giving up."""
+    pp = (next_data.get("props") or {}).get("pageProps") or {}
+    for path in (("pageData", "company"), ("initialState", "company"), ("company",)):
+        cur = pp
+        for part in path:
+            cur = cur.get(part) if isinstance(cur, dict) else None
+        if isinstance(cur, dict) and cur.get("id"):
+            return cur
+    return {}
+
+
 def join(key: str, params: dict, company: str) -> list[RawJob]:
     cid = params.get("company_id")
     domain = params.get("domain") or key
+    if not cid and key in _JOIN_IDS:  # found on an earlier run: saves one 110 KB page per board per run
+        cid, domain = _JOIN_IDS[key]
     if not cid:
         r = http.get(f"https://join.com/companies/{key}", headers=HDR, timeout=30)
         m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', r.text, re.S)
-        comp = json.loads(m.group(1))["props"]["pageProps"]["initialState"].get("company") or {} if m else {}
+        comp = _join_company(json.loads(m.group(1))) if m else {}
         cid, domain = comp.get("id"), comp.get("domain") or key
         if not cid:
             raise RuntimeError("join: company id not found")
+        _JOIN_IDS[key] = (cid, domain)
     out = []
     for page in range(1, 9):  # the public API serves pageSize=5 only
         d = http.get_json(f"https://join.com/api/public/companies/{cid}/jobs?page={page}&pageSize=5", timeout=30) or {}
@@ -375,6 +396,7 @@ def join(key: str, params: dict, company: str) -> list[RawJob]:
                               meta={"board_kind": "join", "employment_type": json.dumps(it.get("employmentType") or "")[:60]}))
         if page >= int((d.get("pagination") or {}).get("pageCount") or 0):
             break
+        time.sleep(random.uniform(0.4, 1.0))  # JOIN's API rate-limits bursts (pageSize is fixed at 5)
     return out
 
 
