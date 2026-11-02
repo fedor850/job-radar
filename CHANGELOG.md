@@ -3,6 +3,33 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] — 2026-11-02
+
+Source resilience: a one-off network error, a random 403 or an overloaded API no longer loses jobs.
+
+### Fixed
+- **A timeout on one ad page made generic sites (XING, Adzuna, iAgora, Work in Austria, WU Jobs …) forget the ad
+  for good** (it was stored as "dropped"). Only 404/410 and non-Vienna ads are dropped now; transient errors are
+  retried on the next run, and after 5 in a row the run stops hammering the site.
+- **One failed page lost the whole run** (karriere.at, jobs.at, DER STANDARD, willhaben, Jooble, Careerjet, Indeed,
+  generic sites): results fetched before the error are kept (`Source.begin/note_error/finish`); a run only fails
+  when it produced nothing.
+- **Jobs whose page could not be opened were written off after 3 tries in ~15 minutes.** Now up to 8 tries with
+  growing gaps (5, 5, 10, 20, 40, 80, 160, 180 min), so an ad survives a site outage of several hours.
+- **WU ZBP Career Center** (Playwright): `eval_on_selector` crashed while the list was being redrawn, `networkidle`
+  never fires on a Blazor page, and one crash lost the run. Now `domcontentloaded`, a safe link probe, pages are kept
+  as they are read, and the browser is started a second time after a crash.
+- **JOIN**: the company id moved from `pageProps.initialState.company` to `pageProps.pageData.company`; two company
+  boards had been failing for days. The id is cached, pages are 0.4–1 s apart.
+
+### Added
+- `http.request`: one retry after a timeout / dropped connection / half-read body (`retry_net`), after 5xx incl.
+  Cloudflare 52x (`retry_5xx`), after a random 403 / 202 with a brand-new session and User-Agent (`retry_block`, used by
+  willhaben, karriere.at, jobs.at, DER STANDARD, SuccessFactors, Jooble and the generic sites), and a second request
+  when a JSON endpoint returns an empty or HTML body (Workday did this for two hours on 31.10.2026).
+- Telegram alert when a company career site has failed for ≈ 3 h in a row (`health.board_alert_fails`, default 30) and
+  a message when it works again. Before, one dead site was only visible in the log.
+
 ## [1.1.1] — 2026-11-02
 
 ### Fixed
