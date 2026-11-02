@@ -51,6 +51,9 @@ class Pipeline:
         self.sources = sources
         self.sem = asyncio.Semaphore(int(settings.get("ai.concurrency", 4)))
         self.locks: dict[str, asyncio.Lock] = {name: asyncio.Lock() for name in sources}
+        #: LinkedIn job pages are opened ONE at a time (a burst of parallel requests gets 429; the waiting
+        #: coroutines cost nothing, whereas waiting worker threads would starve the other sources)
+        self.detail_sem: dict[str, asyncio.Semaphore] = {"linkedin": asyncio.Semaphore(1)}
         self.blocking = set(settings.get("filters.blocking", ["fulltime_only", "german_required", "german_ad", "senior",
                                                                 "wrong_field", "not_vienna", "eu_only",
                                                                 "not_eligible", "expired"]))
@@ -300,7 +303,12 @@ class Pipeline:
             # 2) details (description, apply link)
             if raw.needs_detail:
                 try:
-                    raw = await asyncio.to_thread(source.fetch_detail, raw)
+                    dsem = self.detail_sem.get(source_name)
+                    if dsem is not None:
+                        async with dsem:
+                            raw = await asyncio.to_thread(source.fetch_detail, raw)
+                    else:
+                        raw = await asyncio.to_thread(source.fetch_detail, raw)
                 except LinkedInBlocked as e:
                     # LinkedIn is throttled: try the same ad on the company's own site / ATS / JOIN (free lookups)
                     # instead of waiting for the pause to end

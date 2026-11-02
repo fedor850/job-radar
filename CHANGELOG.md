@@ -3,6 +3,29 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — 2026-11-02
+
+### Fixed
+- **LinkedIn lost most of its results.** A guest search page holds 10 cards but `start` advanced by 25, so cards
+  10–24 of every block were never seen. Pages now advance by 10 (`page_size`).
+- **LinkedIn was paused almost all day.** The limit is per request and random (measured from a data-centre IP: ≈ 20–30 %
+  of requests got a 429, the next one usually passed), but one 429 paused the whole source for 15 → 60 min (14 pauses
+  in a row on 01–02.11.2026). Now every request goes through one global queue and a 429 is retried after a pause
+  (25–50 s, then 50–100 s); only a request that fails on every retry pauses LinkedIn (10 → 20 → 30 min).
+- Job pages used to be requested in parallel (one thread per new job); they are now opened one at a time,
+  3–5.5 s apart, like the searches.
+- A give-up was counted as two strikes (in the request and again in `fetch`).
+
+### Changed
+- Other sources: a 429 is repeated once after a short pause (`Retry-After` when it is ≤ 40 s, else 8–15 s) instead of
+  failing the whole run (`http.request(..., retry_429=1)`; LinkedIn uses its own queue and passes 0).
+- Example config: LinkedIn window 2 h (was 3 h), `max_pages` 6, `delay_sec` [3.0, 5.5], new `page_size`, `retries`,
+  `retry_wait_sec`, shorter `cooldown_sec` (600) / `cooldown_max_sec` (1800); `detail_delay_sec` is gone.
+
+### Upgrading from 1.1.0
+- Update `sources.linkedin` in your `config.yaml` as in `examples/config.example.yaml` (the old keys still work, but
+  `cooldown_sec: 900` / `window_sec: 10800` keep the old behaviour).
+
 ## [1.1.0] — 2026-11-01
 
 ### Changed

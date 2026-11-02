@@ -5,11 +5,19 @@ Detail:  /jobs-guest/jobs/api/jobPosting/{id}
 
 Note (Sept 2026): LinkedIn silently ignores f_JT/f_E/f_WT/sortBy for guests; only f_TPR (posted within)
 and f_AL still filter, so we search broadly and filter on our side.
+
+Note (Nov 2026, measured from a data-centre IP):
+  * a guest search page holds 10 cards, so `start` must advance by 10 (it used to advance by 25 and skipped
+    cards 10–24 of every block);
+  * the limit is per request and random (≈ 20–30 % of requests got a 429, the next one usually passed), so a
+    single 429 must not stop the source for an hour: every request goes through one global queue (one request
+    at a time, 3–5 s apart, also for job details) and a 429 is retried after a pause before anything is paused.
 """
 from __future__ import annotations
 
 import random
 import re
+import threading
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -27,6 +35,10 @@ DETAIL = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{id}"
 VIEW = "https://www.linkedin.com/jobs/view/{id}/"
 
 
+#: statuses that mean "slow down" (LinkedIn answers 429, sometimes 999 or 403)
+_THROTTLE = (429, 999, 403)
+
+
 class LinkedInBlocked(RuntimeError):
     pass
 
@@ -35,24 +47,30 @@ class LinkedInSource(Source):
     name = "linkedin"
     label = "LinkedIn"
 
-    #: after a 429 we leave LinkedIn alone for a while (class-level: shared by all runs)
+    #: after repeated 429s we leave LinkedIn alone for a while (class-level: shared by all runs)
     cooldown_until: float = 0.0
     _rr: int = 0  # round-robin pointer over the "sweep" queries
-    _strikes: int = 0  # throttles in a row (each within 2 h of the previous one)
+    _strikes: int = 0  # pauses in a row (each within 2 h of the previous one)
     _day_runs: int = 0
     _last_throttle: float = 0.0
+    #: ONE request at a time for the whole bot (searches and job details come from different threads) and a
+    #: minimum gap between two requests: bursts of parallel detail requests were a main cause of the 429s
+    _net_lock = threading.Lock()
+    _next_ok: float = 0.0
 
     def _start_cooldown(self) -> int:
-        """Adaptive pause after a 429: 15 → 30 → 60 min while LinkedIn keeps throttling, back to 15 after 2 quiet hours.
+        """Pause after a request failed with 429 on every retry: 10 → 20 → 30 min while LinkedIn keeps refusing,
+        back to 10 after 2 quiet hours. Called once per give-up (by `_get`), never for a single retried 429.
 
-        A fixed 15-min pause made the bot hit the limit again right after every pause (~2 throttles/hour, i.e.
-        LinkedIn was paused about half of the time)."""
+        History: a fixed 15-min pause after EVERY 429 hit the limit again right after each pause; the 15 → 60 min
+        ladder (28.10.2026) then kept LinkedIn paused almost all day (14 pauses in a row on 01–02.11.2026), although
+        a single 429 is random and the next request mostly passes."""
         now = time.time()
         cls = LinkedInSource
         cls._strikes = cls._strikes + 1 if now - cls._last_throttle < 7200 else 1
         cls._last_throttle = now
-        base = int(self.params.get("cooldown_sec", 900))
-        pause = min(base * 2 ** (cls._strikes - 1), int(self.params.get("cooldown_max_sec", 3600)))
+        base = int(self.params.get("cooldown_sec", 600))
+        pause = min(base * 2 ** (cls._strikes - 1), int(self.params.get("cooldown_max_sec", 1800)))
         cls.cooldown_until = now + pause
         self.log.warning("LinkedIn throttled (#%d in a row) — pausing %d min", cls._strikes, pause // 60)
         return pause
@@ -60,24 +78,60 @@ class LinkedInSource(Source):
     def _queries(self) -> list[dict]:
         return self.params.get("queries") or [{"keywords": "", "location": "Vienna, Vienna, Austria", "distance": 25}]
 
-    def _sleep(self) -> None:
-        time.sleep(random.uniform(*self.params.get("delay_sec", (2.0, 4.0))))
+    def _pace(self) -> None:
+        """Earliest moment for the next request: a random gap after the one that just finished."""
+        lo, hi = self.params.get("delay_sec", (3.0, 5.5))
+        LinkedInSource._next_ok = time.time() + random.uniform(lo, hi)
+
+    def _get(self, url: str, kind: str = "search", ok: tuple = (200,)):
+        """The only way to reach LinkedIn: one request at a time, paced, and a 429 is retried after a pause
+        (25–50 s, then 50–100 s) before the source is paused. Raises LinkedInBlocked when it gives up or when
+        another thread has already started a pause; other HTTP errors (404 …) are raised as they are."""
+        cls = LinkedInSource
+        retries = int(self.params.get("retries", 2))
+        lo, hi = self.params.get("retry_wait_sec", (25, 50))
+        with cls._net_lock:
+            for attempt in range(retries + 1):
+                if time.time() < cls.cooldown_until:
+                    raise LinkedInBlocked("LinkedIn cooldown after throttling")
+                wait = cls._next_ok - time.time()
+                if wait > 0:
+                    time.sleep(wait)
+                try:
+                    r = http.get(url, ok=ok, headers={"Accept": "text/html"}, retry_429=0)
+                except http.HttpError as e:
+                    if e.status not in _THROTTLE:
+                        self._pace()
+                        raise
+                    if attempt < retries:
+                        pause = random.uniform(lo, hi) * (attempt + 1)
+                        self.log.info("LinkedIn %s on a %s request — retry %d/%d in %.0f s",
+                                      e.status, kind, attempt + 1, retries, pause)
+                        cls._next_ok = time.time() + pause
+                        continue
+                    self._start_cooldown()
+                    raise LinkedInBlocked(f"LinkedIn throttled ({e.status})") from e
+                self._pace()
+                if attempt:
+                    self.log.info("LinkedIn %s request passed after %d retr%s", kind, attempt, "y" if attempt == 1 else "ies")
+                return r
+        raise LinkedInBlocked("LinkedIn throttled")  # unreachable: the loop returns or raises
 
     def _run_query(self, q: dict, window: int, max_pages: int, out: dict[str, RawJob]) -> int:
-        """Paginate one search. LinkedIn guest pages hold 0–25 cards (often fewer than 25 even when more pages
-        exist), so we stop only on an empty page or a page without anything new."""
+        """Paginate one search. A guest page holds 10 cards (`page_size`), so `start` advances by 10; LinkedIn
+        sometimes returns fewer cards than that even when more pages exist, so we stop only on an empty page or
+        a page without anything new."""
         added = 0
+        step = int(self.params.get("page_size", 10))
         for page in range(max_pages):
             url = (
                 f"{SEARCH}?keywords={quote(q.get('keywords', ''))}&location={quote(q.get('location', ''))}"
-                f"&f_TPR=r{window}&start={page * 25}"
+                f"&f_TPR=r{window}&start={page * step}"
             )
             if q.get("distance"):
                 url += f"&distance={q['distance']}"
             if q.get("geoId"):
                 url += f"&geoId={q['geoId']}"
-            if page or added or out:
-                self._sleep()
             cards = self._get_cards(url)
             new = 0
             for job in cards:
@@ -123,9 +177,9 @@ class LinkedInSource(Source):
                 for _ in range(n_sweeps):
                     q = sweep[LinkedInSource._rr % len(sweep)]
                     LinkedInSource._rr += 1
-                    self._run_query(q, int(q.get("window_sec", 86400)), int(q.get("max_pages", 3)), out)
+                    self._run_query(q, int(q.get("window_sec", 86400)), int(q.get("max_pages", 4)), out)
         except LinkedInBlocked:
-            self._start_cooldown()
+            # the pause was already started by `_get` (once per give-up) — here we only keep what we got
             if out:  # keep what we already got; the next runs will resume after the cooldown
                 self.log.warning("LinkedIn throttled — cooling down; keeping %d cards", len(out))
                 return list(out.values())
@@ -133,12 +187,7 @@ class LinkedInSource(Source):
         return list(out.values())
 
     def _get_cards(self, url: str) -> list[RawJob]:
-        try:
-            r = http.get(url, ok=(200, 400), headers={"Accept": "text/html"})
-        except http.HttpError as e:
-            if e.status in (429, 999, 403):
-                raise LinkedInBlocked(f"LinkedIn throttled ({e.status})") from e
-            raise
+        r = self._get(url, "search", ok=(200, 400))
         if r.status_code == 400 or not r.text.strip():
             return []
         soup = BeautifulSoup(r.text, "lxml")
@@ -181,14 +230,7 @@ class LinkedInSource(Source):
     def fetch_detail(self, job: RawJob) -> RawJob:
         if time.time() < LinkedInSource.cooldown_until:
             raise LinkedInBlocked("LinkedIn cooldown after throttling")
-        time.sleep(random.uniform(*self.params.get("detail_delay_sec", (1.5, 3.0))))
-        try:
-            r = http.get(DETAIL.format(id=job.external_id), headers={"Accept": "text/html"})
-        except http.HttpError as e:
-            if e.status in (429, 999, 403):
-                self._start_cooldown()
-                raise LinkedInBlocked(f"LinkedIn throttled ({e.status})") from e
-            raise
+        r = self._get(DETAIL.format(id=job.external_id), "detail")
         soup = BeautifulSoup(r.text, "lxml")
         desc = soup.select_one(".show-more-less-html__markup") or soup.select_one(".description__text")
         job.description = html_to_text(str(desc)) if desc else job.description

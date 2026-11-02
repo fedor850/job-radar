@@ -58,10 +58,30 @@ def session() -> requests.Session:
     return s
 
 
-def request(method: str, url: str, *, timeout: float = 25, ok=(200,), **kw: Any) -> requests.Response:
-    t0 = time.monotonic()
-    r = session().request(method, url, timeout=timeout, **kw)
-    dt = time.monotonic() - t0
+def _wait_429(r: requests.Response) -> float | None:
+    """Seconds to wait before retrying after a 429: the server's Retry-After if it is short, else 8–15 s.
+    None = the server asks for a long pause → do not retry now."""
+    ra = (r.headers.get("Retry-After") or "").strip()
+    if ra.isdigit():
+        return float(ra) + random.uniform(1, 3) if int(ra) <= 40 else None
+    return random.uniform(8, 15)
+
+
+def request(method: str, url: str, *, timeout: float = 25, ok=(200,), retry_429: int = 1,
+            **kw: Any) -> requests.Response:
+    """`retry_429`: how often a 429 is repeated after a short pause (rate limits are usually per request and
+    random; one patient retry saves most of them). LinkedIn passes 0: it has its own queue and pauses."""
+    for attempt in range(max(retry_429, 0) + 1):
+        t0 = time.monotonic()
+        r = session().request(method, url, timeout=timeout, **kw)
+        dt = time.monotonic() - t0
+        if r.status_code == 429 and 429 not in ok and attempt < retry_429:
+            wait = _wait_429(r)
+            if wait is not None:
+                log.info("HTTP 429 for %s — retry %d/%d in %.0f s", url, attempt + 1, retry_429, wait)
+                time.sleep(wait)
+                continue
+        break
     if r.status_code not in ok:
         log.debug("HTTP %s %s -> %s (%.1fs)", method, url, r.status_code, dt)
         raise HttpError(r.status_code, url, r.text if r.text else "")

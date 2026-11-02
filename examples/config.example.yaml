@@ -113,14 +113,17 @@ health:
 sources:
   linkedin:
     enabled: true
-    interval_sec: 360        # every 6 minutes (the 3 h window overlaps with margin; less often → fewer LinkedIn limits)
-    # LinkedIn shows a job in search with a delay, so the window is 3 hours (duplicates are dropped automatically).
-    window_sec: 10800
-    max_pages: 8
-    delay_sec: [2.0, 4.0]    # pause between requests (avoids blocking)
-    cooldown_sec: 900        # after "429 Too Many Requests": pause 15 min, repeated → 30 → 60 min
-    cooldown_max_sec: 3600
-    detail_delay_sec: [1.5, 3.0]   # pause before loading each job
+    interval_sec: 360        # every 6 minutes
+    # LinkedIn shows a job in search with a delay, so the window overlaps generously (duplicates are dropped
+    # automatically). 2 h ≈ 25–35 jobs in Vienna = 3–4 pages.
+    window_sec: 7200
+    max_pages: 6
+    page_size: 10            # a guest search page holds 10 cards → `start` advances by 10 (25 skipped cards)
+    delay_sec: [3.0, 5.5]    # gap between ANY two LinkedIn requests (searches and job pages share one queue)
+    retries: 2               # a 429 is retried after retry_wait_sec (x1, x2) before LinkedIn is paused
+    retry_wait_sec: [25, 50]
+    cooldown_sec: 600        # pause only after a request failed on every retry: 10 → 20 → 30 min
+    cooldown_max_sec: 1800
     sweep_per_run: 1         # keyword "sweep" searches per run (at night)
     sweep_night: [20, 7]     # sweep from 20:00 to 07:00 (during the day LinkedIn throttles data-centre IPs)
     day_sweep_every: 5       # during the day only every 5th run (≈ every 30 min)
