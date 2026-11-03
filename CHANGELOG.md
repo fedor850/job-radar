@@ -3,6 +3,24 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.4] — 2026-11-03
+
+Recall audit: vacancies the bot saw but wrongly dropped, and vacancies it never saw.
+
+### Fixed
+- **karriere.at coverage.** A day brings more ads than the 3 list pages held, and ads older than the bot never reached
+  the first pages (184 open ads, many of them internships / Werkstudent, were absent from the database). The list is
+  read 4 pages deep and, every run, 4 of 40 keyword searches (`keywords`, rotating; a full backfill runs all of them);
+  HTTP 404/410 means "past the last page"; the search no longer dies on list entries without `jobsItem`.
+- **`not remote` pre-filter** dropped Vienna/Austria-only ads found by the "Austria" LinkedIn search that have no
+  remote wording; a bare country name is now accepted.
+- **Title pre-filter** no longer drops student/intern/junior ads over soft words (`senior`, `head of`, `Assistant to
+  the Head`, "Junior to Senior" …).
+- **Triage** no longer rejects "Junior …/Assistenz der Geschäftsführung" as a senior title (entry-level word in the title).
+- **Duplicate detection** is not allowed to hide a fresh posting behind an old, already-rejected copy of the same title.
+- **Snippet-only student ads** (LinkedIn/search snippets without the ad body) are kept at a lower score floor and
+  flagged instead of being thrown away.
+
 ## [1.1.3] — 2026-11-03
 
 Full ad text: no more scoring on a cut-off snippet.

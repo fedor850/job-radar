@@ -331,3 +331,14 @@ def test_senior_german_wording_2026_11_01():
     assert verify_blockers(r, job, today) == [] and r["blockers"] == ["german_required", "senior"]
     r = {"blockers": ["german_required"], "evidence": [{"blocker": "german_required", "quote": "Englisch fließend, Deutsch von Vorteil"}]}
     assert verify_blockers(r, job, today) == ["german_required"]
+
+
+def test_triage_entry_level_title_is_not_senior():
+    from jobradar.ai import triage_verdict
+    job = {"title": "Junior to Senior Consultant (m/w/d)"}
+    t = {"obviously_irrelevant": True, "category": "senior_title", "evidence": "Senior", "reason": "senior"}
+    assert not triage_verdict(t, job)[0]
+    job2 = {"title": "Assistenz der Geschäftsführung (m/w/d)"}
+    t2 = {"obviously_irrelevant": True, "category": "senior_title", "evidence": "Geschäftsführung", "reason": "MD"}
+    assert not triage_verdict(t2, job2)[0]
+    assert triage_verdict(t, {"title": "Senior Consultant"})[0]

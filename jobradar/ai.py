@@ -723,6 +723,8 @@ def triage_verdict(t: dict, job: dict) -> tuple[bool, str]:
         return False, f"evidence «{ev}» not in title ({reason})"
     if cat == "senior_title" and not _SENIOR_TITLE.search(ev):
         return False, f"«{ev}» is not a senior title"
+    if cat == "senior_title" and _ENTRY_TITLE.search(title):
+        return False, f"entry-level word in the title ({title[:60]})"  # "Junior to Senior", "Assistenz der GF"
     if cat == "apprenticeship_or_pupils" and not _APPRENTICE.search(ev):
         return False, f"«{ev}» is not an apprenticeship"
     return True, f"{cat}: «{ev}» — {reason}"[:200]
@@ -733,6 +735,9 @@ _SPECULATIVE = re.compile(r"\b(likely|unlikely|probably|implies|implied|may|migh
 _SENIOR_TITLE = re.compile(r"\b(senior|sr\.?|head|lead|leiter\w*|leitung|director|direktor\w*|principal|chief|vp|"
                            r"vice president|partner|gesch[äa]ftsf[üu]hr\w*|managing director|abteilungsleit\w*|"
                            r"bereichsleit\w*|teamleit\w*|team ?lead\w*|filialleit\w*)\b", re.I)
+_ENTRY_TITLE = re.compile(r"\b(junior|trainee|intern|internship|praktik\w*|werkstudent\w*|working student|student\w*|"
+                          r"assistant|assistenz\w*|associate|graduate|absolvent\w*|berufseinsteig\w*|entry|"
+                          r"nachwuchs\w*|ferial\w*)", re.I)
 _APPRENTICE = re.compile(r"lehrling|lehrstelle|\blehre\b|apprentic|sch[üu]ler|pupil|pflichtschul", re.I)
 
 

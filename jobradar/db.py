@@ -172,21 +172,28 @@ class DB:
                 d[k] = {}
         return d
 
-    def find_by_fingerprint(self, fp: str, days: int = 45, exclude_uid: str = "") -> dict | None:
+    #: An earlier row that never got a fair look must not swallow a later copy of the same ad: ads dropped for their
+    #: place (query "remote"), failed ones, snippet-only blocks. `fresh=True` (the copy is new/undated) also skips
+    #: never-evaluated "bootstrap" backlog rows.
+    _UNFAIR = ("NOT (stage='prefiltered_out' AND reason IN ('not remote','location after detail',"
+               "'dropped by source (location/removed)')) AND stage<>'failed' "
+               "AND NOT (stage='blocked' AND reason LIKE 'snippet_only%')")
+
+    def find_by_fingerprint(self, fp: str, days: int = 45, exclude_uid: str = "", fresh: bool = False) -> dict | None:
         since = iso(now_utc() - timedelta(days=days))
         row = self.one(
-            "SELECT * FROM jobs WHERE fingerprint=? AND first_seen>=? AND uid<>? AND stage<>'duplicate' "
-            "ORDER BY id ASC LIMIT 1",
+            "SELECT * FROM jobs WHERE fingerprint=? AND first_seen>=? AND uid<>? AND stage<>'duplicate' AND "
+            + self._UNFAIR + (" AND stage<>'bootstrap'" if fresh else "") + " ORDER BY id ASC LIMIT 1",
             (fp, since, exclude_uid),
         )
         return self.row_to_job(row) if row else None
 
-    def find_same_title(self, title_key: str, days: int = 45, exclude_uid: str = "") -> list[dict]:
+    def find_same_title(self, title_key: str, days: int = 45, exclude_uid: str = "", fresh: bool = False) -> list[dict]:
         """Jobs with the same normalised title regardless of company (for cross-source duplicates)."""
         since = iso(now_utc() - timedelta(days=days))
         rows = self.query(
-            "SELECT * FROM jobs WHERE fingerprint LIKE ? AND first_seen>=? AND uid<>? AND stage<>'duplicate' "
-            "ORDER BY id ASC LIMIT 20",
+            "SELECT * FROM jobs WHERE fingerprint LIKE ? AND first_seen>=? AND uid<>? AND stage<>'duplicate' AND "
+            + self._UNFAIR + (" AND stage<>'bootstrap'" if fresh else "") + " ORDER BY id ASC LIMIT 20",
             ("%|" + title_key, since, exclude_uid),
         )
         return [self.row_to_job(r) for r in rows]

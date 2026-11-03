@@ -18,7 +18,7 @@ from .sources.boards import detect_board
 from .sources.linkedin import LinkedInBlocked
 from .sources.linkedin import LinkedInSource
 from .sources.original import SNIPPET_SOURCES, fetch_posting, find_original, has_student_signal
-from .util import company_key, norm_title, fingerprint, iso, local, now_utc, parse_iso
+from .util import company_key, norm_title, fingerprint, iso, local, location_ok, now_utc, parse_iso
 
 if TYPE_CHECKING:
     from .bot import Notifier
@@ -29,6 +29,12 @@ LEARNABLE = {"greenhouse", "lever", "ashby", "smartrecruiters", "workday", "pers
              "teamtailor", "bamboohr", "breezy", "pinpoint", "join"}
 
 
+STUDENT_TITLE = re.compile(
+    r"praktik|intern\b|internship|werkstudent|working[ -]student|student|studierende|trainee|junior|teilzeit|"
+    r"part[- ]?time|ferial|assistant to|assistenz|executive assistant|graduate", re.I)
+# exclusion patterns that a student/junior word in the title overrides (senior/leader words, pupils)
+_SOFT_EXCLUDE = re.compile(r"senior|head of|teamleit|lehrling|sch\[üu\]ler|chief|director", re.I)
+COUNTRY_ONLY = re.compile(r"^(austria|österreich|oesterreich)$", re.I)
 CUT_SOURCES = ("adzuna",)  # aggregators whose page shows only the start of the ad
 
 
@@ -176,7 +182,9 @@ class Pipeline:
             if backfill and raw.posted_at and (now_utc() - raw.posted_at) > timedelta(days=backfill_days):
                 self.db.insert_job(raw, fp, stage="bootstrap", reason="older than backfill window")
                 continue
-            dup = self.db.find_by_fingerprint(fp, days=45, exclude_uid=raw.uid) or self._similar_dup(raw)
+            fresh = raw.posted_at is None or (now_utc() - raw.posted_at) < timedelta(days=3)
+            dup = self.db.find_by_fingerprint(fp, days=45, exclude_uid=raw.uid, fresh=fresh) \
+                or self._similar_dup(raw, fresh=fresh)
             if dup:
                 self.db.insert_job(raw, fp, stage="duplicate", dup_of=dup["id"])
                 self.maybe_upgrade_link(dup, raw)
@@ -192,14 +200,14 @@ class Pipeline:
                 queued.append((job_id, raw))
         return queued
 
-    def _similar_dup(self, raw: RawJob) -> dict | None:
+    def _similar_dup(self, raw: RawJob, fresh: bool = False) -> dict | None:
         """Same title from another source where the company is missing/different spelling: compare descriptions."""
         tk = norm_title(raw.title)
         if len(tk.split()) < 3:
             return None
         my_key = company_key(raw.company) if raw.company else ""
         mine = _words(raw.description)
-        for c in self.db.find_same_title(tk, days=45, exclude_uid=raw.uid):
+        for c in self.db.find_same_title(tk, days=45, exclude_uid=raw.uid, fresh=fresh):
             their_key = company_key(c.get("company") or "")
             if my_key and their_key and my_key != their_key:
                 continue
@@ -240,16 +248,25 @@ class Pipeline:
         return None
 
     def prefilter(self, raw: RawJob) -> tuple[bool, str]:
+        student_title = bool(STUDENT_TITLE.search(raw.title))
         for pat in self.title_exclude:
             if pat.search(raw.title):
+                # "Executive Assistant to the CEO", "Junior/Senior …", "Ferialpraktikum für Schüler und Studierende":
+                # a student/junior word in the title beats a senior/leader/pupil keyword — the AI decides, with proof
+                if student_title and _SOFT_EXCLUDE.search(pat.pattern):
+                    continue
                 return False, f"title:{pat.pattern}"
         comp = (raw.company or "").lower()
         for c in self.company_exclude:
             if c and c in comp:
                 return False, f"company:{c}"
         if raw.meta.get("query_remote"):
+            # this search returns the whole of Austria: keep remote ads, ads located in Vienna and ads with only
+            # "Austria" as the place (the AI checks the place in the text); drop ads located in other cities
             blob = f"{raw.title} {raw.location}".lower()
-            if not re.search(r"remote|home\s*office|homeoffice|anywhere", blob):
+            loc = (raw.location or "").strip()
+            country_only = bool(loc) and bool(COUNTRY_ONLY.match(loc))
+            if not (re.search(r"remote|home\s*office|homeoffice|anywhere", blob) or location_ok(loc) or country_only):
                 return False, "not remote"
         return True, ""
 
@@ -367,10 +384,16 @@ class Pipeline:
             a["score"] = score
         self.db.update_job(job_id, score=score, analysis=a)
         jm = job.get("meta") or {}
-        if (jm.get("snippet_only") or jm.get("text_cut")) and not blockers and score >= self.min_score:
+        floor = self.min_score
+        if jm.get("snippet_only") and has_student_signal(job.get("title") or "", job.get("description") or "",
+                                                         str(jm.get("employment_type") or "")):
+            floor = max(15, self.min_score - 20)  # the score is low only because the text is missing: look for it
+        keep_low = False
+        if (jm.get("snippet_only") or jm.get("text_cut")) and not blockers and score >= floor:
             res = await self._snippet_only(job_id, today)
             if res == "blocked":
                 return "blocked"
+            keep_low = res == "keep" and floor < self.min_score  # student-type ad, text unavailable: send with a warning
             if res == "rescored":
                 job = self.db.get_job(job_id)
                 a = job.get("analysis") or {}
@@ -379,7 +402,7 @@ class Pipeline:
         if blockers:
             self.db.update_job(job_id, stage="blocked", reason=",".join(sorted(blockers)))
             return "blocked"
-        if score < self.min_score:
+        if score < self.min_score and not keep_low:
             self.db.update_job(job_id, stage="below_threshold")
             return "below_threshold"
         # 4) the same ad already delivered under another company name / title (e.g. a recruiter re-post)?
@@ -570,19 +593,28 @@ class Pipeline:
         i.e. the ad survives an outage of several hours. Jobs that wait for the Claude API are not counted."""
         since = iso(now_utc() - timedelta(days=4))
         rows = self.db.query(
-            "SELECT * FROM jobs WHERE stage IN ('error','queued') AND first_seen>=? AND updated<=? ORDER BY id LIMIT 300",
+            "SELECT * FROM jobs WHERE stage IN ('error','queued') AND (first_seen>=? OR json_extract(meta,'$.recovery')=1)"
+            " AND updated<=? ORDER BY (json_extract(meta,'$.recovery') IS NOT NULL), (source='linkedin'), id LIMIT 1500",
             (since, iso(now_utc() - timedelta(minutes=5))),
         )
-        n = 0
         tried = 0
         li_cooling = time.time() < LinkedInSource.cooldown_until
+        st = getattr(self, "settings", None)
+        li_recovered = 0
+        todo: list[tuple[int, RawJob, str, bool]] = []
+        batch = int(st.get("general.retry_batch", 40)) if st is not None else 40
         for row in rows:
-            if tried >= 40:
+            if tried >= batch:
                 break
             job = self.db.row_to_job(row)
             if job["source"] == "linkedin" and li_cooling:
                 continue  # LinkedIn is throttled: wait, do not spend an attempt (and an AI triage call)
             meta = job.get("meta") or {}
+            if job["source"] == "linkedin" and meta.get("recovery"):
+                # re-checking old rejects must never starve the live LinkedIn search of its request budget
+                if li_recovered >= 8:
+                    continue
+                li_recovered += 1
             if (job.get("reason") or "").startswith("AI:"):
                 # Claude API down / out of credit: keep the job until the API is back (4-day window), try ≤ every 15 min
                 if (parse_iso(job.get("updated")) or now_utc()) > now_utc() - timedelta(minutes=15):
@@ -611,9 +643,15 @@ class Pipeline:
             name = "boards" if ":" in job["source"] else job["source"]
             if name not in self.sources:
                 continue
-            res = await self.evaluate(job["id"], raw, name, silent=bool(meta.get("initial")))
-            n += res == "sent"
-        return n
+            todo.append((job["id"], raw, name, bool(meta.get("initial"))))
+        gate = asyncio.Semaphore(6)  # a few ads at a time: a backlog of re-checks must not take hours
+
+        async def one(jid: int, raw: RawJob, name: str, silent: bool) -> str:
+            async with gate:
+                return await self.evaluate(jid, raw, name, silent=silent)
+
+        results = await asyncio.gather(*(one(*t) for t in todo), return_exceptions=True)
+        return sum(r == "sent" for r in results)
 
     async def release_held(self) -> int:
         rows = self.db.query("SELECT id FROM jobs WHERE stage='held' ORDER BY score DESC LIMIT 60")
