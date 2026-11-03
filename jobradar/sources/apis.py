@@ -164,14 +164,25 @@ class CareerjetSource(_ApiSource):
             for locale in self.params.get("locales") or ["de_AT", "en_GB"]:
                 if not self._budget_ok(1):
                     break
-                try:
-                    r = http.get("https://search.api.careerjet.net/v4/query", headers=hdr, timeout=30, params={
-                        "locale_code": locale, "keywords": kw, "location": self.params.get("location", "Wien"),
-                        "sort": "date", "page_size": 50, "page": 1, "fragment_size": 400,
-                        "user_ip": self.params.get("user_ip", ""), "user_agent": UA})  # your server's public IP
-                    jobs = r.json().get("jobs") or []
-                except Exception as e:  # noqa: BLE001 - one bad keyword / locale must not lose the rest
-                    self.note_error(e, f"{kw}/{locale}")
+                params = {
+                    "locale_code": locale, "keywords": kw, "location": self.params.get("location", "Wien"),
+                    "sort": "date", "page_size": 50, "page": 1, "fragment_size": 400,
+                    "user_ip": self.params.get("user_ip", ""), "user_agent": UA}  # your server's public IP
+                jobs = None
+                for attempt in (1, 2):  # Careerjet sometimes answers a valid query with a one-off 400/5xx
+                    try:
+                        r = http.get("https://search.api.careerjet.net/v4/query", headers=hdr, timeout=30,
+                                     params=params)
+                        jobs = r.json().get("jobs") or []
+                        break
+                    except Exception as e:  # noqa: BLE001 - one bad keyword / locale must not lose the rest
+                        body = str(getattr(e, "body", "") or "")[:150].replace("\n", " ")
+                        if attempt == 1:
+                            self.log.info("careerjet %s/%s: %s %s — retrying", kw, locale, e, body)
+                            time.sleep(2)
+                            continue
+                        self.note_error(e, f"{kw}/{locale} {body}")
+                if jobs is None:
                     continue
                 for j in jobs:
                     url = j.get("url") or ""
