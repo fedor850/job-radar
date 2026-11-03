@@ -17,7 +17,7 @@ from .models import RawJob
 from .sources.boards import detect_board
 from .sources.linkedin import LinkedInBlocked
 from .sources.linkedin import LinkedInSource
-from .sources.original import fetch_posting, find_original, has_student_signal
+from .sources.original import SNIPPET_SOURCES, fetch_posting, find_original, has_student_signal
 from .util import company_key, norm_title, fingerprint, iso, local, now_utc, parse_iso
 
 if TYPE_CHECKING:
@@ -27,6 +27,9 @@ log = logging.getLogger("jobradar.pipeline")
 
 LEARNABLE = {"greenhouse", "lever", "ashby", "smartrecruiters", "workday", "personio", "recruitee", "workable",
              "teamtailor", "bamboohr", "breezy", "pinpoint", "join"}
+
+
+CUT_SOURCES = ("adzuna",)  # aggregators whose page shows only the start of the ad
 
 
 class AIUnavailable(RuntimeError):
@@ -182,6 +185,8 @@ class Pipeline:
             if not ok:
                 self.db.insert_job(raw, fp, stage="prefiltered_out", reason=reason)
                 continue
+            if raw.needs_detail:
+                raw.meta["pending_detail"] = True  # survives a failed attempt: a retry must fetch the full ad again
             job_id = self.db.insert_job(raw, fp, stage="queued")
             if job_id:
                 queued.append((job_id, raw))
@@ -325,6 +330,7 @@ class Pipeline:
                         raw.apply_url = orig["url"]
                     raw.needs_detail = False
                     log.info("linkedin throttled — full text for '%s' via %s", raw.title, raw.meta["full_text_from"])
+                raw.meta.pop("pending_detail", None)
                 if raw.meta.get("drop"):
                     self.db.update_job(job_id, stage="prefiltered_out", reason="location after detail")
                     return "prefiltered_out"
@@ -343,6 +349,8 @@ class Pipeline:
                                    company_linkedin=raw.company_linkedin, meta=raw.meta, url=raw.url,
                                    posted_at=iso(raw.posted_at) if raw.posted_at else None)
                 job = self.db.get_job(job_id)
+            # 2b) the ad text is visibly cut off (Adzuna shows only the start; "…" at the end): look for the original
+            job = await self._complete_cut_text(job_id, job)
             # 3) full scoring
             today = local(now_utc()).strftime("%Y-%m-%d (%A)")
             a = await self._ai(self.ai.score(job, today))
@@ -358,7 +366,8 @@ class Pipeline:
             score = self.min_score
             a["score"] = score
         self.db.update_job(job_id, score=score, analysis=a)
-        if (job.get("meta") or {}).get("snippet_only") and not blockers and score >= self.min_score:
+        jm = job.get("meta") or {}
+        if (jm.get("snippet_only") or jm.get("text_cut")) and not blockers and score >= self.min_score:
             res = await self._snippet_only(job_id, today)
             if res == "blocked":
                 return "blocked"
@@ -400,6 +409,32 @@ class Pipeline:
             asyncio.get_running_loop().create_task(self.resolve_company_link(job_id))
         return "sent"
 
+    async def _complete_cut_text(self, job_id: int, job: dict) -> dict:
+        """Free lookups for the full ad when the text we have is obviously only the beginning of it."""
+        meta = job.get("meta") or {}
+        fam = job["source"].split(":")[0]
+        d = (job.get("description") or "").rstrip()
+        if meta.get("snippet_only") or meta.get("full_text_from") or fam in SNIPPET_SOURCES:
+            return job
+        if not ((d.endswith(("…", "...")) and len(d) < 1500) or (fam in CUT_SOURCES and len(d) < 900)):
+            return job
+        try:
+            orig = await asyncio.to_thread(find_original, self.db, job["company"], job["title"])
+        except Exception:  # noqa: BLE001
+            orig = None
+        if orig and len(orig.get("description") or "") > len(d) + 200:
+            meta["snippet"] = d[:600]
+            meta["full_text_from"] = orig.get("via") or "original"
+            upd = {"description": orig["description"][:15000], "meta": meta}
+            if orig.get("url") and classify_link(orig["url"]) == "company":
+                upd["apply_url"] = orig["url"]
+            self.db.update_job(job_id, **upd)
+            log.info("cut-off text of '%s' replaced by the original (%s)", job["title"], meta["full_text_from"])
+        else:
+            meta["text_cut"] = True
+            self.db.update_job(job_id, meta=meta)
+        return self.db.get_job(job_id)
+
     async def _snippet_only(self, job_id: int, today: str) -> str:
         """Jooble/Careerjet job where only the API snippet is known and the free lookups found no original.
 
@@ -423,6 +458,7 @@ class Pipeline:
             orig = await asyncio.to_thread(fetch_posting, url, job["title"]) if url else None
             if orig and len(orig["description"]) > len(job.get("description") or "") + 200:
                 meta.pop("snippet_only", None)
+                meta.pop("text_cut", None)
                 meta["snippet"] = (job.get("description") or "")[:600]
                 meta["full_text_from"] = "web_search"
                 for k in ("employment_type", "salary"):
@@ -438,6 +474,11 @@ class Pipeline:
                 log.info("snippet job %s re-scored on full text: %s", job_id, a.get("score"))
                 return "rescored"
         a = job.get("analysis") or {}
+        if not meta.get("snippet_only"):  # only the start of the ad is known, but the job is not a snippet-only one: keep it
+            note = "⚠️ The source shows only the start of the ad — open the original to read the rest (hours, German, tasks)"
+            a["risks"] = [note] + [r for r in (a.get("risks") or []) if r != note][:2]
+            self.db.update_job(job_id, analysis=a)
+            return "keep"
         if has_student_signal(job.get("title") or "", job.get("description") or "", str(meta.get("employment_type") or "")):
             note = "⚠️ The source gave only a snippet of the ad — check hours and language on the original before applying"
             a["risks"] = [note] + [r for r in (a.get("risks") or []) if r != note][:2]
@@ -563,7 +604,7 @@ class Pipeline:
                 location=job.get("location") or "", url=job.get("url") or "", apply_url=job.get("apply_url") or "",
                 description=job.get("description") or "", posted_at=parse_iso(job.get("posted_at")),
                 company_linkedin=job.get("company_linkedin") or "", meta=meta,
-                needs_detail=not bool(job.get("description")) and job["source"].split(":")[0] in
+                needs_detail=bool(meta.get("pending_detail")) or not bool(job.get("description")) and job["source"].split(":")[0] in
                 ("linkedin", "karriere", "zbp", "smartrecruiters", "workday", "rmk", "jobsat", "willhaben", "derstandard",
                  "taleo", "htmllist", "bamboohr", "breezy", "join", "osce"),
             )

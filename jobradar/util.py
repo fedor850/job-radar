@@ -103,6 +103,7 @@ def parse_relative_age(text: str, ref: datetime | None = None) -> datetime | Non
 
 _WS = re.compile(r"[ \t ]+")
 _NL = re.compile(r"\n{3,}")
+_JUNK_LINES = {"null", "undefined", "none", "nan"}
 
 
 def html_to_text(html: str | None, max_len: int | None = None) -> str:
@@ -124,6 +125,7 @@ def html_to_text(html: str | None, max_len: int | None = None) -> str:
         tag.insert_after("\n")
     text = soup.get_text("")
     text = "\n".join(_WS.sub(" ", line).strip() for line in text.splitlines())
+    text = "\n".join(l for l in text.split("\n") if l.lower() not in _JUNK_LINES)  # "null" placeholders (XING)
     text = _NL.sub("\n\n", text).strip()
     if max_len and len(text) > max_len:
         text = text[:max_len].rsplit(" ", 1)[0] + " …"

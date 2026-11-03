@@ -233,7 +233,10 @@ class LinkedInSource(Source):
         r = self._get(DETAIL.format(id=job.external_id), "detail")
         soup = BeautifulSoup(r.text, "lxml")
         desc = soup.select_one(".show-more-less-html__markup") or soup.select_one(".description__text")
-        job.description = html_to_text(str(desc)) if desc else job.description
+        if desc:
+            job.description = html_to_text(str(desc))
+        elif not job.description and int(job.meta.get("attempts", 0)) < 5:
+            raise RuntimeError("LinkedIn: the posting page has no description")  # retried by the queue
         criteria = {}
         for li in soup.select("li.description__job-criteria-item"):
             h = li.select_one("h3")

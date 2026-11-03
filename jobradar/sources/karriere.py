@@ -67,6 +67,9 @@ class KarriereSource(Source):
         text_html = (content.get("jobContent") or {}).get("text") or ""
         if text_html:
             job.description = html_to_text(text_html)
+        elif int(job.meta.get("attempts", 0)) < 5:
+            # never score on the list snippet (~200 chars) while the full text may still come: retry later
+            raise RuntimeError("karriere.at: the detail page has no ad text yet")
         apply_url = ((content.get("applyAction") or {}).get("applyButton") or {}).get("applyUrl") or ""
         if apply_url and "karriere.at" not in apply_url:
             job.apply_url = clean_url(apply_url)

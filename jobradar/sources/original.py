@@ -61,15 +61,8 @@ def _same_company(a: str, b: str) -> bool:
     return bool(ta & tb) or company_key(a) == company_key(b)
 
 
-def fetch_posting(url: str, title: str = "") -> dict | None:
-    """Download a posting page and return its full text (schema.org JobPosting preferred) or None."""
-    try:
-        r = http.get(url, headers=HDR, ok=(200,), timeout=20)
-    except Exception:  # noqa: BLE001
-        return None
-    if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
-        r.encoding = "utf-8"
-    page = r.text
+def _read_page(page: str) -> tuple[dict, str]:
+    """(schema.org JobPosting, best text) of a posting page."""
     jp = _jobposting(page) or {}
     desc = html_to_text(jp.get("description") or "") if jp.get("description") else ""
     if len(desc) < 300:
@@ -80,6 +73,34 @@ def fetch_posting(url: str, title: str = "") -> dict | None:
         body = html_to_text(str(main)) if main else ""
         if len(body) > len(desc):
             desc = body
+    return jp, desc
+
+
+def fetch_posting(url: str, title: str = "", browser: bool = True) -> dict | None:
+    """Download a posting page and return its full text (schema.org JobPosting preferred) or None.
+
+    A plain request is tried first. If the page is empty, blocked or too short (the ad is drawn by JavaScript or
+    hidden behind a "show more" button), it is opened in headless Chromium, which presses such buttons."""
+    final_url, jp, desc = url, {}, ""
+    try:
+        r = http.get(url, headers=HDR, ok=(200,), timeout=20)
+        if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
+            r.encoding = "utf-8"
+        final_url = r.url or url
+        jp, desc = _read_page(r.text)
+    except Exception:  # noqa: BLE001
+        pass
+    if browser and (len(desc) < 1200 or looks_blocked(desc)):
+        from .. import browser as _browser
+
+        b = _browser.render(url)
+        if b:
+            jp2, desc2 = _read_page(b["html"])
+            if len(desc2) < 400:
+                desc2 = max(desc2, re.sub(r"\n{3,}", "\n\n", b["text"]).strip()) if len(b["text"]) < 20000 else desc2
+            if len(desc2) > len(desc) + 150 and not looks_blocked(desc2):
+                jp, desc, final_url = jp2 or jp, desc2, b["url"] or final_url
+                log.info("full text via browser (%d chars, %d buttons pressed): %s", len(desc), b["clicked"], url[:90])
     if len(desc) < 400 or looks_blocked(desc):
         return None
     jtitle = htmllib.unescape(str(jp.get("title") or "")).strip()
@@ -88,7 +109,7 @@ def fetch_posting(url: str, title: str = "") -> dict | None:
             return None
         if not jtitle and norm_title(title)[:25] not in norm_title(desc[:4000]):
             return None
-    out = {"url": r.url or url, "description": desc[:15000], "title": jtitle,
+    out = {"url": final_url, "description": desc[:15000], "title": jtitle,
            "employment_type": jp.get("employmentType") or ""}
     if isinstance(out["employment_type"], list):
         out["employment_type"] = ", ".join(map(str, out["employment_type"]))

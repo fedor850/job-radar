@@ -3,6 +3,29 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.3] — 2026-11-03
+
+Full ad text: no more scoring on a cut-off snippet.
+
+### Fixed
+- **A failed attempt to open an ad page turned into scoring on the list snippet.** karriere.at (and any source that
+  stores a short list text) kept the ~200-character snippet in the database, so the retry saw "description present"
+  and never fetched the real ad (16 karriere.at jobs on 1 Nov). The queue now remembers `pending_detail` until the
+  full text has been read. karriere.at and LinkedIn also retry instead of falling back to the snippet when the page
+  comes back without an ad.
+- **Personio accounts with an empty XML feed** (Denzel and others: `<jobDescriptions>` empty) were evaluated with no
+  text at all; the ad is now read from the posting page.
+- **XING ads ended with ten lines of `null`** (46 of 126 recent ads).
+- **Adzuna shows only the start of the ad** and its "read the original" link is behind a CAPTCHA; texts cut off
+  (shorter than 900 characters, or ending with "…") are replaced by the same ad from another source / the company's
+  ATS / JOIN; a job that would be sent without the original carries a warning.
+
+### Added
+- `jobradar/browser.py`: headless Chromium reader that presses "show more" / "mehr anzeigen" / "Read more" buttons.
+  `fetch_posting()` (originals found for aggregator jobs and by the web search) falls back to it when a plain
+  request returns an empty, blocked or short page. Sites that block data-centre IPs (LinkedIn, Indeed, Jooble,
+  Careerjet, Adzuna redirects) are skipped.
+
 ## [1.1.2] — 2026-11-02
 
 Source resilience: a one-off network error, a random 403 or an overloaded API no longer loses jobs.

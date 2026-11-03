@@ -268,10 +268,14 @@ def personio(key: str, params: dict, company: str) -> list[RawJob]:
         if not _keep(loc, "", False, params):
             continue
         desc_parts = []
+        body_len = 0
         for jd in p.findall("jobDescriptions/jobDescription"):
-            desc_parts.append(f"{(jd.findtext('name') or '').strip()}\n{html_to_text(jd.findtext('value') or '')}")
+            body = html_to_text(jd.findtext("value") or "")
+            body_len += len(body)
+            desc_parts.append(f"{(jd.findtext('name') or '').strip()}\n{body}")
         pid = g("id")
         url = f"https://{key}.jobs.personio.{tld}/job/{pid}"
+        empty = body_len < 300  # the feed carries no (or a stub) ad text → read the posting page
         out.append(
             RawJob(
                 source=f"personio:{key}",
@@ -283,10 +287,27 @@ def personio(key: str, params: dict, company: str) -> list[RawJob]:
                 apply_url=url,
                 description="\n\n".join(desc_parts),
                 posted_at=parse_iso(g("createdAt")),
-                meta={"schedule": g("schedule"), "employment_type": g("employmentType"), "seniority": g("seniority")},
+                meta={"schedule": g("schedule"), "employment_type": g("employmentType"), "seniority": g("seniority"),
+                      **({"board_kind": "personio"} if empty else {})},
+                needs_detail=empty,
             )
         )
     return out
+
+
+def personio_detail(job: RawJob) -> RawJob:
+    """The XML feed of some Personio accounts (e.g. Denzel) has no ad text: take it from the posting page."""
+    r = http.get(job.url, headers={"Accept-Language": "de,en;q=0.8"}, timeout=30)
+    soup = BeautifulSoup(r.text, "lxml")
+    blocks = soup.select(".jb-description-item") or soup.select('[class*="jobDescriptionItem"]')
+    text = "\n\n".join(html_to_text(str(b)) for b in blocks)
+    if len(text) < 200:
+        main = soup.select_one("main")
+        text = html_to_text(str(main)) if main else text
+    if text:
+        job.description = text[:15000]
+    job.needs_detail = False
+    return job
 
 
 def recruitee(key: str, params: dict, company: str) -> list[RawJob]:
@@ -467,6 +488,7 @@ DETAILS: dict[str, Callable[[RawJob], RawJob]] = {
     "smartrecruiters": smartrecruiters_detail,
     "workday": workday_detail,
     "rmk": rmk_detail,
+    "personio": personio_detail,
 }
 
 
