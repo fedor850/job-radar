@@ -351,3 +351,18 @@ def test_confident_english_for_cut_ads():
     assert confident_english(en)
     assert not confident_english(de)
     assert not confident_english("Praktikum Vending (m/w/d)")  # too short to be sure
+
+
+def test_post_keeps_raw_score_when_blocked():
+    from jobradar.ai import AI
+    ai = AI.__new__(AI)
+    ai.settings = type("S", (), {"get": lambda self, k, d=None: d})()
+    res = {"score": 72, "blockers": ["german_ad"]}
+    import jobradar.ai as m
+    orig = m._enforce_blockers
+    m._enforce_blockers = lambda r, *a, **k: []
+    try:
+        AI._post(ai, res, {"description": ""}, "2026-11-04")
+    finally:
+        m._enforce_blockers = orig
+    assert res["_raw_score"] == 72 and res["score"] == 25

@@ -98,6 +98,12 @@ nudge:
   enabled: true              # in the evening (20:30) remind about strong jobs you did not react to
   min_score: 75
 
+digest:
+  enabled: true              # morning (08:15) digest: jobs cut only by the German-ad / full-time filters although the AI rates them above min_score
+  min_score: 60
+  max_items: 15
+  hours: 24
+
 mail:
   interval_sec: 300
   initial_days: 3
