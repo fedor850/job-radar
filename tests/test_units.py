@@ -342,3 +342,12 @@ def test_triage_entry_level_title_is_not_senior():
     t2 = {"obviously_irrelevant": True, "category": "senior_title", "evidence": "Geschäftsführung", "reason": "MD"}
     assert not triage_verdict(t2, job2)[0]
     assert triage_verdict(t, {"title": "Senior Consultant"})[0]
+
+
+def test_confident_english_for_cut_ads():
+    from jobradar.util import confident_english
+    en = "Working student for our sales team. You will support the team with reports and work with our customers across Europe."
+    de = "Werkstudent:in für unser Team. Sie unterstützen das Team bei Berichten und arbeiten mit unseren Kunden."
+    assert confident_english(en)
+    assert not confident_english(de)
+    assert not confident_english("Praktikum Vending (m/w/d)")  # too short to be sure

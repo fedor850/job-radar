@@ -18,7 +18,7 @@ from .sources.boards import detect_board
 from .sources.linkedin import LinkedInBlocked
 from .sources.linkedin import LinkedInSource
 from .sources.original import SNIPPET_SOURCES, fetch_posting, find_original, has_student_signal
-from .util import company_key, norm_title, fingerprint, iso, local, location_ok, now_utc, parse_iso
+from .util import company_key, confident_english, norm_title, fingerprint, iso, local, location_ok, now_utc, parse_iso
 
 if TYPE_CHECKING:
     from .bot import Notifier
@@ -373,7 +373,7 @@ class Pipeline:
             a = await self._ai(self.ai.score(job, today))
         score = int(a.get("score", 0))
         blockers = set(a.get("blockers") or []) & self.blocking
-        if a.get("_unverified") and not blockers and score < self.min_score:
+        if a.get("_unverified") and not blockers and self.min_score - 20 <= score < self.min_score:
             # the model kept a reason it could not prove even after a re-ask: never hide a job on a guess —
             # deliver it at the threshold with a warning instead
             names = ", ".join(BLOCKER_LABEL.get(b, b) for b in a["_unverified"])
@@ -384,16 +384,15 @@ class Pipeline:
             a["score"] = score
         self.db.update_job(job_id, score=score, analysis=a)
         jm = job.get("meta") or {}
-        floor = self.min_score
-        if jm.get("snippet_only") and has_student_signal(job.get("title") or "", job.get("description") or "",
-                                                         str(jm.get("employment_type") or "")):
-            floor = max(15, self.min_score - 20)  # the score is low only because the text is missing: look for it
-        keep_low = False
-        if (jm.get("snippet_only") or jm.get("text_cut")) and not blockers and score >= floor:
+        if (jm.get("snippet_only") or jm.get("text_cut")) and not blockers and score >= self.min_score:
+            # only a piece of the ad is known: send it only when that piece is clearly English
+            # (a cut German ad may hide "fließend Deutsch" in the part we cannot see)
+            if not confident_english(f"{job.get('title') or ''}\n{job.get('description') or ''}"):
+                self.db.update_job(job_id, stage="blocked", reason="cut_not_english: only part of the ad is known and it is not clearly English")
+                return "blocked"
             res = await self._snippet_only(job_id, today)
             if res == "blocked":
                 return "blocked"
-            keep_low = res == "keep" and floor < self.min_score  # student-type ad, text unavailable: send with a warning
             if res == "rescored":
                 job = self.db.get_job(job_id)
                 a = job.get("analysis") or {}
@@ -402,7 +401,7 @@ class Pipeline:
         if blockers:
             self.db.update_job(job_id, stage="blocked", reason=",".join(sorted(blockers)))
             return "blocked"
-        if score < self.min_score and not keep_low:
+        if score < self.min_score:
             self.db.update_job(job_id, stage="below_threshold")
             return "below_threshold"
         # 4) the same ad already delivered under another company name / title (e.g. a recruiter re-post)?

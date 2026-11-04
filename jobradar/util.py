@@ -329,6 +329,15 @@ def detect_lang(text: str) -> tuple[str, int, int]:
     return "mixed", de, en
 
 
+def confident_english(text: str) -> bool:
+    """True only when `text` is clearly English. A short snippet (too few stop words for detect_lang to judge)
+    counts as English only with several English and (almost) no German function words."""
+    lang, de, en = detect_lang(text)
+    if lang == "en":
+        return True
+    return lang == "unknown" and en >= 6 and de * 3 <= en
+
+
 def quote_in_text(quote: str, text: str) -> bool:
     """True if `quote` (copied by the model) really appears in `text` — tolerant to markdown, case and spacing."""
     def norm(s: str) -> list[str]:

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.5] — 2026-11-04
+
+Nothing is sent below the score threshold.
+
+### Fixed
+- **Jobs scored 8–38 were delivered to a 45 threshold.** (1) When the model kept a reason it could not prove, the job was
+  raised to the threshold whatever its score; now only a score within 20 points of the threshold is raised (15 of 41
+  jobs sent overnight were raised from 8–20: "JavaScript Developer", "Sekretärin"...). (2) The lowered floor for
+  snippet-only student ads of 1.1.4 is removed: below the threshold means not sent.
+- **Cut-off ads:** an ad where only the start (or a snippet) is known is sent only when that text is clearly English;
+  a German or unclear cut-off ad is not sent.
+
 ## [1.1.4] — 2026-11-03
 
 Recall audit: vacancies the bot saw but wrongly dropped, and vacancies it never saw.
