@@ -851,6 +851,7 @@ class AI:
         dropped = _enforce_blockers(res, job.get("description") or "", job,
                                     list(self.settings.get("filters.english_workplace", []) or []), d)
         if res.get("blockers"):
+            res["_raw_score"] = res["score"]  # fit without the stop factors: feeds the daily "cut off but promising" digest
             res["score"] = min(res["score"], 25)
         return dropped
 

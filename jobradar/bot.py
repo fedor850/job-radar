@@ -870,6 +870,47 @@ class JobRadar:
                          f' — {esc(clip(a.get("company_clean") or j["company"], 30))}')
         await self.notifier.text("\n".join(lines))
 
+    #: stop factors a human can overrule (language of the ad, hours): the digest lists jobs cut ONLY by these
+    DIGEST_SOFT = {"german_ad", "german_required", "fulltime_only"}
+
+    async def job_digest(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Morning digest of jobs the filters cut off although the AI rated them high without the stop factor."""
+        from .ai import BLOCKER_LABEL
+        min_raw = int(self.settings.get("digest.min_score", 60))
+        limit = int(self.settings.get("digest.max_items", 15))
+        since = now_utc() - timedelta(hours=int(self.settings.get("digest.hours", 24)))
+        rows = self.db.query(
+            "SELECT * FROM jobs WHERE stage='blocked' AND updated>=? AND analysis LIKE '%\"_raw_score\"%' "
+            "ORDER BY updated DESC LIMIT 600", (iso(since),))
+        picked = []
+        for r in rows:
+            j = self.db.row_to_job(r)
+            a, m = j.get("analysis") or {}, j.get("meta") or {}
+            reasons = {x for x in (j.get("reason") or "").split(",") if x}
+            raw = int(a.get("_raw_score") or 0)
+            if m.get("digested") or raw < min_raw or not reasons or not reasons <= self.DIGEST_SOFT:
+                continue
+            picked.append((raw, j, a, reasons))
+        picked.sort(key=lambda t: -t[0])
+        log.info("scheduled: digest — %d candidates", len(picked))
+        if not picked:
+            return
+        shown = picked[:limit]
+        lines = [f"🗂 <b>{len(picked)} promising jobs were cut by a filter</b> (fit {min_raw}+ without the stop factor) — "
+                 f"worth a look, ask the recruiter about the stop factor:"]
+        for raw, j, a, reasons in shown:
+            url = j.get("apply_url") or j.get("url")
+            why = ", ".join(BLOCKER_LABEL.get(x, x) for x in sorted(reasons))
+            lines.append(f'• {raw} · <a href="{esc(url)}">{esc(clip(a.get("title_clean") or j["title"], 60))}</a>'
+                         f' — {esc(clip(a.get("company_clean") or j["company"], 30))} · <i>{esc(why)}</i>')
+        if len(picked) > len(shown):
+            lines.append(f"…and {len(picked) - len(shown)} more (digest.max_items).")
+        await self.notifier.text("\n".join(lines), silent=True)
+        for _, j, _, _ in shown:
+            m = j.get("meta") or {}
+            m["digested"] = True
+            self.db.update_job(j["id"], meta=m)
+
     async def job_backup(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         bdir = self.settings.data_dir / "backups"
         bdir.mkdir(exist_ok=True)
@@ -923,6 +964,9 @@ class JobRadar:
         jq.run_daily(self.job_weekly, time=dtime(19, 0, tzinfo=tz), days=(0,), name="weekly")  # 0 = Sunday in PTB
         if self.settings.get("nudge.enabled", True):
             jq.run_daily(self.job_evening, time=dtime(20, 30, tzinfo=tz), name="evening")
+        if self.settings.get("digest.enabled", True):
+            jq.run_daily(self.job_digest, time=dtime(int(self.settings.get("digest.hour", 8)),
+                                                      int(self.settings.get("digest.minute", 15)), tzinfo=tz), name="digest")
         jq.run_daily(self.job_backup, time=dtime(4, 0, tzinfo=tz), name="backup")
         if self.db.kv_get("last_version") != __version__:
             self.db.kv_set("last_version", __version__)

@@ -3,6 +3,9 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## 1.1.6 — 2026-11-04
+- Morning digest (08:15, `digest.*` in config): jobs cut ONLY by the German-ad / full-time filters but rated `digest.min_score`+ (default 60) by the AI without the stop factor. The pre-cap score is stored as `analysis._raw_score`.
+
 ## [1.1.5] — 2026-11-04
 
 Nothing is sent below the score threshold.
