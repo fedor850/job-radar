@@ -575,9 +575,9 @@ CANDIDATE: dict = {"name": "the candidate", "first": "The candidate", "pitch": "
 
 
 # ------------------------------------------------------------ summer full-time exception (candidate.summer_fulltime)
-# A third-country student with a ≤20 h/week permit may work full-time only in the university's lecture-free period
-# (no new permit needed). So a FIXED-TERM SUMMER position is fine even when full-time; everything else is not.
-SUMMER: dict = {"enabled": False, "note": ""}
+# The candidate cannot work full-time next to his studies, but a full-time internship / job that STARTS in the summer
+# (from `start_from`, e.g. 1 May 2027) is fine, whatever its length. Everything else follows the usual hours rules.
+SUMMER: dict = {"enabled": False, "start_from": date(2027, 5, 1), "note": ""}
 _SUMMER_MARK = re.compile(
     r"sommer\s*-?\s*(?:praktik\w*|job\w*|intern\w*|programm\w*|analyst\w*|trainee\w*|aushilf\w*|akademie)|"
     r"ferial\w*|summer\s*-?\s*(?:intern\w*|analyst\w*|associate\w*|job\w*|placement\w*|program\w*|student\w*|"
@@ -585,22 +585,38 @@ _SUMMER_MARK = re.compile(
     r"(?:internship|praktikum)\s+(?:in\s+(?:the\s+)?summer|im\s+sommer)|"
     r"(?:jul[iy]|august|september|juni?e?)\s*(?:-|–|—|bis|to|until|and)\s*(?:august|september|sept?\.?|juli|july)\s*(?:2027)?|"
     r"(?:mai|may)\s*(?:-|–|—|bis|to|until)\s*(?:august|september|sept?\.?|juli|july)\s*(?:2027)?", re.I)
-_NOT_SUMMER = re.compile(
-    r"unbefristet|permanent (?:position|role|contract|employment)|open[\s-]ended|dauerhaft|festanstellung|"
-    r"(?:1[0-9]|[6-9]|sechs|sieben|acht|neun|zehn|zw[öo]lf|six|seven|eight|nine|ten|twelve)[\s-]*"
-    r"(?:monat\w*|months?)|ab sofort[^.]{0,40}(?:unbefristet|vollzeit)|bis (?:dezember|december|2028)", re.I)
+_MONTHS = {"jan": 1, "feb": 2, "mär": 3, "mar": 3, "apr": 4, "mai": 5, "may": 5, "jun": 6, "jul": 7, "aug": 8,
+           "sep": 9, "okt": 10, "oct": 10, "nov": 11, "dez": 12, "dec": 12}
+_START_WORD = r"(?:ab(?:\s+dem)?|from|starting(?:\s+(?:on|in|from))?|start(?:\s+date)?|beginn|eintritt|per|as of|begin\w*)"
+_START_NAMED = re.compile(_START_WORD + r"\s*[:\-]?\s*(?:\d{1,2}\.?\s*)?(?:of\s+)?([a-zäöü]{3,9})\.?,?\s*(20\d\d)", re.I)
+_START_NUM = re.compile(_START_WORD + r"\s*[:\-]?\s*\d{1,2}\.\s*(\d{1,2})\.\s*(20\d\d)", re.I)
+
+
+def _start_dates(text: str) -> list[date]:
+    out = []
+    for m in _START_NAMED.finditer(text):
+        mon = _MONTHS.get(m.group(1).lower()[:3])
+        if mon:
+            out.append(date(int(m.group(2)), mon, 1))
+    for m in _START_NUM.finditer(text):
+        try:
+            out.append(date(int(m.group(2)), int(m.group(1)), 1))
+        except ValueError:
+            pass
+    return out
 
 
 def summer_fulltime(job: dict) -> bool:
-    """The ad is a fixed-term summer position (Sommerpraktikum, Ferialjob, summer analyst, 'Juli–September 2027' …)
-    and not a permanent / long-term one. Used to let a full-time summer role through the fulltime_only blocker."""
+    """The ad is a summer internship / job (Sommerpraktikum, Ferialjob, summer analyst …) or says it starts on or after
+    `start_from` (default 1 May 2027). The length does not matter. Lets a full-time role through `fulltime_only`."""
     if not SUMMER.get("enabled"):
         return False
     meta = job.get("meta") or {}
     text = " . ".join([job.get("title") or "", str(meta.get("employment_types") or ""), job.get("description") or ""])
-    if not _SUMMER_MARK.search(text):
-        return False
-    return not _NOT_SUMMER.search(text)
+    if _SUMMER_MARK.search(text):
+        return True
+    starts = _start_dates(text)
+    return bool(starts) and min(starts) >= SUMMER["start_from"]
 
 
 def _render(s: str, v: dict) -> str:
@@ -631,20 +647,20 @@ def configure(settings=None) -> None:
     sal = int(get("candidate.min_monthly_salary", 1200))
     rules = get("ai.extra_scoring_rules", []) or []
     sf = get("candidate.summer_fulltime") or {}
+    try:
+        start_from = date.fromisoformat(str(sf.get("start_from", "2027-05-01")))
+    except ValueError:
+        start_from = date(2027, 5, 1)
     SUMMER.clear()
-    SUMMER.update(enabled=bool(sf.get("enabled")), note=str(sf.get("note") or
-                  "☀️ Full-time summer role — only possible in the university's lecture-free period; before that max "
-                  f"{TARGET_H} h/week"))
+    SUMMER.update(enabled=bool(sf.get("enabled")), start_from=start_from, note=str(sf.get("note") or ""))
     summer_rule = ""
     if SUMMER["enabled"]:
         summer_rule = (
-            "  EXCEPTION — fixed-term SUMMER roles (Sommerpraktikum / Ferialpraktikum / Ferialjob / summer internship / "
-            "summer analyst, or an explicit period inside "
-            f"{sf.get('window_from', 'May')}–{sf.get('window_to', 'September')} {sf.get('year', 2027)}) are NOT fulltime_only "
-            "even when full-time: the candidate can work full-time in the university's lecture-free period. Set "
-            "hours_ok=\"yes\", do not add fulltime_only, and add the risk "
-            f"\"{SUMMER['note']}\". Still fulltime_only: permanent / open-ended / long (6+ months) full-time positions "
-            "and full-time roles outside the summer.\n")
+            "  EXCEPTION — a full-time role is NOT fulltime_only when it is a summer internship / summer job "
+            "(Sommerpraktikum / Ferialpraktikum / Ferialjob / summer internship, analyst, job) or when the ad says it "
+            f"starts on or after {start_from.day} {start_from.strftime('%B %Y')}. Its length does not matter (months, "
+            "years or open-ended). Set hours_ok=\"yes\" and do not add fulltime_only for it. A full-time role that "
+            "starts earlier, or has no such start, stays fulltime_only.\n")
     sf_vars = {"SUMMER_RULE": summer_rule}
     v = {"T": TARGET_H, "T1": TARGET_H + 1, "M": MAX_H, "M1": MAX_H - 1, "CITY": CANDIDATE["city"],
          "NAME": name, "FIRST": CANDIDATE["first"], "TZ": CANDIDATE["timezone"],
@@ -713,7 +729,8 @@ def verify_blockers(res: dict, job: dict, today: date | None = None) -> list[str
         res["_summer_ft"] = True
         if res.get("hours_ok") == "no":
             res["hours_ok"] = "yes"
-        _add_risk(res, SUMMER["note"])
+        if SUMMER["note"]:
+            _add_risk(res, SUMMER["note"])
     res["blockers"] = kept
     res["_proof"] = proof
     if "german_required" in dropped and res.get("german") in ("b2", "c1_fluent"):

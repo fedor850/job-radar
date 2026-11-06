@@ -18,18 +18,13 @@ Nothing is sent below the score threshold.
 - **Cut-off ads:** an ad where only the start (or a snippet) is known is sent only when that text is clearly English;
   a German or unclear cut-off ad is not sent.
 
-## [1.1.7] — 2026-11-06
-
-Full-time summer roles for a student on a ≤ 20 h/week work permit.
+## [1.1.8] — 2026-11-06
 
 ### Added
-- **`candidate.summer_fulltime`** (config.yaml). A student whose permit allows 20 h/week may work full-time in the
-  university's lecture-free period without a new permit. With `enabled: true`, a fixed-term summer position
-  (Sommerpraktikum / Ferialpraktikum / Ferialjob / Sommerjob / summer internship, analyst, associate, job, programme /
-  "Sommer 2027" / a period such as "Juli bis September") is no longer a `fulltime_only` stop factor even when it is
-  full-time. Permanent, open-ended and long (6+ months) full-time roles stay blocked. The card carries a risk line
-  (`candidate.summer_fulltime.note`), and the scoring prompt gets a matching exception (`{{SUMMER_RULE}}`).
-- Search keywords for summer jobs (LinkedIn, Indeed, Adzuna, XING) in the personal config.
+- **`candidate.summer_fulltime`** (config.yaml, optional). With `enabled: true`, a full-time role is not a `fulltime_only`
+  stop factor when it is a summer internship / job (Sommerpraktikum, Ferialpraktikum, Ferialjob, summer internship …) or
+  when the ad says it starts on or after `start_from` (e.g. `2027-05-01`). The length does not matter. Full-time roles
+  that start earlier or have no start date are still blocked. Optional `note` adds a risk line to the card.
 
 ## [1.1.4] — 2026-11-03
 

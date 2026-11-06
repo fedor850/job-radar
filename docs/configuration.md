@@ -50,7 +50,7 @@ The deterministic checks (hours, German level, seniority, location) do not read 
 | `claude_project` | "Claude" | Name of your Claude Project, shown in the bot's "send this file to …" hint |
 | `target_weekly_hours` | 20 | Hours you want. Salary is pro-rated to these hours; more hours (up to `max_weekly_hours`) adds a "propose N h" note. |
 | `max_weekly_hours` | 25 | More than this = `fulltime_only` stop factor (needs proof in the ad, see below) |
-| `summer_fulltime` | off | `enabled`, `year`, `window_from`, `window_to`, `note`. Fixed-term summer roles (Sommerpraktikum, Ferialjob, summer internship …) pass the `fulltime_only` stop factor even when full-time; permanent / 6+ month full-time roles stay blocked. For students whose permit allows full-time only in lecture-free periods. |
+| `summer_fulltime` | off | `enabled`, `start_from` (date), optional `note`. A full-time role passes the `fulltime_only` stop factor when it is a summer internship / job or starts on or after `start_from`, whatever its length. |
 | `min_monthly_salary` | 1200 | EUR gross for `target_weekly_hours`. Below it the card shows 💶. It never hides a job. |
 
 ### `location`
