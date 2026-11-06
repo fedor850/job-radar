@@ -133,22 +133,27 @@ def test_summer_fulltime_exception():
     def job(title, desc):
         return {"id": 1, "title": title, "company": "X", "location": "Wien", "description": desc, "meta": {}}
 
-    def verdict(j, quote):
+    def blockers(j, quote):
         r = {"blockers": ["fulltime_only"], "hours_ok": "no", "risks": [],
              "evidence": [{"blocker": "fulltime_only", "quote": quote}]}
         ai.verify_blockers(r, j, date(2026, 11, 6))
-        return r
+        return r["blockers"], r
 
-    summer = job("Sommerpraktikum Finance 2027", "Vollzeit, Juli bis September 2027, Praktikum im Bereich Finance.")
-    longft = job("Analyst", "Vollzeit, unbefristet, ab sofort.")
     try:
-        ai.configure(S({"candidate": {"summer_fulltime": {"enabled": True}}}))
-        r = verdict(summer, "Vollzeit, Juli bis September 2027")
-        assert r["blockers"] == [] and r["hours_ok"] == "yes" and any("Full-time summer" in x for x in r["risks"])
+        ai.configure(S({"candidate": {"summer_fulltime": {"enabled": True, "start_from": "2027-05-01"}}}))
+        # summer internship / job: passes, no note added
+        b, r = blockers(job("Sommerpraktikum Finance", "Vollzeit, Juli bis September 2027."), "Vollzeit, Juli bis September 2027")
+        assert b == [] and r["hours_ok"] == "yes" and r["risks"] == []
+        # start on/after 1 May 2027, any length (even permanent) passes
+        assert blockers(job("Analyst", "Vollzeit, unbefristet. Start ab Juni 2027."), "Vollzeit, unbefristet")[0] == []
+        assert blockers(job("Analyst", "Vollzeit, 24 months. Starting 01.09.2027."), "Vollzeit, 24 months")[0] == []
+        assert blockers(job("Analyst", "Vollzeit. Eintritt ab Mai 2027."), "Vollzeit")[0] == []
+        # earlier start or no start date: still blocked
+        assert blockers(job("Analyst", "Vollzeit, unbefristet, ab sofort."), "Vollzeit, unbefristet")[0] == ["fulltime_only"]
+        assert blockers(job("Analyst", "Vollzeit. Start ab Februar 2027."), "Vollzeit")[0] == ["fulltime_only"]
         assert "NOT fulltime_only" in ai.SCORE_SYSTEM
-        assert verdict(longft, "Vollzeit, unbefristet")["blockers"] == ["fulltime_only"]
-        ai.configure(S({}))  # feature off → summer full-time stays blocked
-        assert verdict(summer, "Vollzeit, Juli bis September 2027")["blockers"] == ["fulltime_only"]
+        ai.configure(S({}))  # feature off
+        assert blockers(job("Sommerpraktikum", "Vollzeit, Juli bis September 2027."), "Vollzeit")[0] == ["fulltime_only"]
         assert "NOT fulltime_only" not in ai.SCORE_SYSTEM
     finally:
         ai.configure(None)
