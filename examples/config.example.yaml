@@ -10,6 +10,12 @@ candidate:                   # who is looking for a job (used in prompts, e-mail
   claude_project: job search  # name of your Claude project that writes CVs (shown in the bot)
   target_weekly_hours: 20      # hours you want (salary is pro-rated to these hours)
   max_weekly_hours: 25         # more than this = "full-time" stop factor (remove fulltime_only from filters.blocking to allow any hours)
+  summer_fulltime:             # optional: let fixed-term SUMMER full-time roles through (student permit: full-time only in lecture-free periods)
+    enabled: false
+    year: 2027
+    window_from: May
+    window_to: September
+    note: "☀️ Full-time summer role — full-time only in the lecture-free period; before that max 20 h/week"
   min_monthly_salary: 1200     # EUR gross for target_weekly_hours; below → 💶 note (never a stop factor)
 
 location:

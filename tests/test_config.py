@@ -114,3 +114,41 @@ def test_interface_is_english():
     bad = [f"{p.name}:{i}" for p in files for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
            if re.search("[\u0400-\u04FF]", line)]
     assert not bad, bad
+
+
+def test_summer_fulltime_exception():
+    from datetime import date
+    from jobradar import ai
+
+    class S:
+        def __init__(self, d): self.d = d
+        def get(self, k, default=None):
+            cur = self.d
+            for part in k.split("."):
+                if not isinstance(cur, dict) or part not in cur:
+                    return default
+                cur = cur[part]
+            return cur
+
+    def job(title, desc):
+        return {"id": 1, "title": title, "company": "X", "location": "Wien", "description": desc, "meta": {}}
+
+    def verdict(j, quote):
+        r = {"blockers": ["fulltime_only"], "hours_ok": "no", "risks": [],
+             "evidence": [{"blocker": "fulltime_only", "quote": quote}]}
+        ai.verify_blockers(r, j, date(2026, 11, 6))
+        return r
+
+    summer = job("Sommerpraktikum Finance 2027", "Vollzeit, Juli bis September 2027, Praktikum im Bereich Finance.")
+    longft = job("Analyst", "Vollzeit, unbefristet, ab sofort.")
+    try:
+        ai.configure(S({"candidate": {"summer_fulltime": {"enabled": True}}}))
+        r = verdict(summer, "Vollzeit, Juli bis September 2027")
+        assert r["blockers"] == [] and r["hours_ok"] == "yes" and any("Full-time summer" in x for x in r["risks"])
+        assert "NOT fulltime_only" in ai.SCORE_SYSTEM
+        assert verdict(longft, "Vollzeit, unbefristet")["blockers"] == ["fulltime_only"]
+        ai.configure(S({}))  # feature off → summer full-time stays blocked
+        assert verdict(summer, "Vollzeit, Juli bis September 2027")["blockers"] == ["fulltime_only"]
+        assert "NOT fulltime_only" not in ai.SCORE_SYSTEM
+    finally:
+        ai.configure(None)
