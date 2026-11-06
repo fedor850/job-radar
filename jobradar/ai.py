@@ -173,7 +173,7 @@ unknowns, impressions and "likely/probably" are NEVER blockers (score the job on
   part-time option, or a minimum above {{M}} h (e.g. "ab 30 Wochenstunden", "30–38,5 h"). Not for internships or
   working-student/part-time roles that allow ≤ {{M}} h, not when it says Teilzeit möglich / {{T}}–40 h / "ab {{T}} Stunden".
   If a full-time internship is offered without a part-time option, it IS fulltime_only.
-  Hours of {{T1}}–{{M}} per week (e.g. "{{M}} h", "{{M1}} Stunden", "{{T}}–30 h") are NOT a blocker: set hours_ok="yes" and add the
+{{SUMMER_RULE}}  Hours of {{T1}}–{{M}} per week (e.g. "{{M}} h", "{{M1}} Stunden", "{{T}}–30 h") are NOT a blocker: set hours_ok="yes" and add the
   risk "⏱ more than {{T}} h — propose {{T}} h/week to the employer" (the candidate may be able to negotiate).
 - german_required: German above B1 is REQUIRED, or German is the main working language. Map the wording:
   "gute Deutschkenntnisse" / "good German" / "B2" → german="b2" → BLOCKER;
@@ -574,6 +574,35 @@ CANDIDATE: dict = {"name": "the candidate", "first": "The candidate", "pitch": "
                    "country_code": "AT", "timezone": "Europe/Vienna"}
 
 
+# ------------------------------------------------------------ summer full-time exception (candidate.summer_fulltime)
+# A third-country student with a ≤20 h/week permit may work full-time only in the university's lecture-free period
+# (no new permit needed). So a FIXED-TERM SUMMER position is fine even when full-time; everything else is not.
+SUMMER: dict = {"enabled": False, "note": ""}
+_SUMMER_MARK = re.compile(
+    r"sommer\s*-?\s*(?:praktik\w*|job\w*|intern\w*|programm\w*|analyst\w*|trainee\w*|aushilf\w*|akademie)|"
+    r"ferial\w*|summer\s*-?\s*(?:intern\w*|analyst\w*|associate\w*|job\w*|placement\w*|program\w*|student\w*|"
+    r"trainee\w*|school|2027)|sommer\s*2027|"
+    r"(?:internship|praktikum)\s+(?:in\s+(?:the\s+)?summer|im\s+sommer)|"
+    r"(?:jul[iy]|august|september|juni?e?)\s*(?:-|–|—|bis|to|until|and)\s*(?:august|september|sept?\.?|juli|july)\s*(?:2027)?|"
+    r"(?:mai|may)\s*(?:-|–|—|bis|to|until)\s*(?:august|september|sept?\.?|juli|july)\s*(?:2027)?", re.I)
+_NOT_SUMMER = re.compile(
+    r"unbefristet|permanent (?:position|role|contract|employment)|open[\s-]ended|dauerhaft|festanstellung|"
+    r"(?:1[0-9]|[6-9]|sechs|sieben|acht|neun|zehn|zw[öo]lf|six|seven|eight|nine|ten|twelve)[\s-]*"
+    r"(?:monat\w*|months?)|ab sofort[^.]{0,40}(?:unbefristet|vollzeit)|bis (?:dezember|december|2028)", re.I)
+
+
+def summer_fulltime(job: dict) -> bool:
+    """The ad is a fixed-term summer position (Sommerpraktikum, Ferialjob, summer analyst, 'Juli–September 2027' …)
+    and not a permanent / long-term one. Used to let a full-time summer role through the fulltime_only blocker."""
+    if not SUMMER.get("enabled"):
+        return False
+    meta = job.get("meta") or {}
+    text = " . ".join([job.get("title") or "", str(meta.get("employment_types") or ""), job.get("description") or ""])
+    if not _SUMMER_MARK.search(text):
+        return False
+    return not _NOT_SUMMER.search(text)
+
+
 def _render(s: str, v: dict) -> str:
     for k, val in v.items():
         s = s.replace("{{" + k + "}}", str(val))
@@ -601,11 +630,28 @@ def configure(settings=None) -> None:
                      country_code=get("location.country_code", "AT"), timezone=get("general.timezone", "Europe/Vienna"))
     sal = int(get("candidate.min_monthly_salary", 1200))
     rules = get("ai.extra_scoring_rules", []) or []
+    sf = get("candidate.summer_fulltime") or {}
+    SUMMER.clear()
+    SUMMER.update(enabled=bool(sf.get("enabled")), note=str(sf.get("note") or
+                  "☀️ Full-time summer role — only possible in the university's lecture-free period; before that max "
+                  f"{TARGET_H} h/week"))
+    summer_rule = ""
+    if SUMMER["enabled"]:
+        summer_rule = (
+            "  EXCEPTION — fixed-term SUMMER roles (Sommerpraktikum / Ferialpraktikum / Ferialjob / summer internship / "
+            "summer analyst, or an explicit period inside "
+            f"{sf.get('window_from', 'May')}–{sf.get('window_to', 'September')} {sf.get('year', 2027)}) are NOT fulltime_only "
+            "even when full-time: the candidate can work full-time in the university's lecture-free period. Set "
+            "hours_ok=\"yes\", do not add fulltime_only, and add the risk "
+            f"\"{SUMMER['note']}\". Still fulltime_only: permanent / open-ended / long (6+ months) full-time positions "
+            "and full-time roles outside the summer.\n")
+    sf_vars = {"SUMMER_RULE": summer_rule}
     v = {"T": TARGET_H, "T1": TARGET_H + 1, "M": MAX_H, "M1": MAX_H - 1, "CITY": CANDIDATE["city"],
          "NAME": name, "FIRST": CANDIDATE["first"], "TZ": CANDIDATE["timezone"],
          "SAL": f"{sal:,}",
          "EX1": f"{round(2600 * TARGET_H / 38.5):,}", "EX2": f"{round(15 * TARGET_H * 4.33):,}",
          "EXTRA_RULES": "".join(f"{r.strip()}\n" for r in rules if str(r).strip()),
+         **sf_vars,
          "WHY_EXAMPLE": get("ai.why_example") or "B2B sales: met a EUR 50k monthly target — matches the ad's sales-quota requirement"}
     SCORE_SYSTEM = _render(SCORE_SYSTEM_TEMPLATE, v)
     EMAIL_SYSTEM = _render(EMAIL_SYSTEM_TEMPLATE, v)
@@ -661,6 +707,13 @@ def verify_blockers(res: dict, job: dict, today: date | None = None) -> list[str
             proof[b] = q[:200]
         else:
             dropped.append(b)
+    if "fulltime_only" in kept and summer_fulltime(job):
+        kept.remove("fulltime_only")  # fixed-term summer role: full-time is fine in the lecture-free period
+        proof.pop("fulltime_only", None)
+        res["_summer_ft"] = True
+        if res.get("hours_ok") == "no":
+            res["hours_ok"] = "yes"
+        _add_risk(res, SUMMER["note"])
     res["blockers"] = kept
     res["_proof"] = proof
     if "german_required" in dropped and res.get("german") in ("b2", "c1_fluent"):
