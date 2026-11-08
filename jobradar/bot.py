@@ -33,6 +33,7 @@ from .sources.jobsat import JobsAtSource
 from .sources.willhaben import WillhabenSource
 from .sources.derstandard import DerStandardSource
 from .sources.sites import SiteSource
+from .sources.remote import RemoteJobsSource
 from .telegram_ui import (
     SITE_LABELS,
     SKIP_REASON_TEXT,
@@ -53,7 +54,7 @@ log = logging.getLogger("jobradar.bot")
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 SOURCE_NAMES = {"linkedin": "LinkedIn", "indeed": "Indeed", "karriere": "karriere.at", "zbp": "WU ZBP",
                 "jobsat": "jobs.at", "willhaben": "willhaben Jobs", "derstandard": "DER STANDARD Jobs", "jooble": "Jooble", "careerjet": "Careerjet", "gmail": "Mail (Gmail)",
-                "boards": "Company sites", "linkedin_alerts": "LinkedIn Job Alerts (mail)"}
+                "boards": "Company sites", "remotejobs": "Remote job boards", "linkedin_alerts": "LinkedIn Job Alerts (mail)"}
 
 
 # ====================================================================== notifier
@@ -229,6 +230,9 @@ class JobRadar:
                 out[site["name"]] = SiteSource(s, site, db=self.db)
                 SOURCE_NAMES.setdefault(site["name"], site.get("label", site["name"]))
                 SITE_LABELS[site["name"]] = site.get("label", site["name"])
+        rparams = s.get("sources.remotejobs", {}) or {}
+        if rparams.get("enabled", False):
+            out["remotejobs"] = RemoteJobsSource(s, rparams, db=self.db)
         bparams = s.get("sources.boards", {}) or {}
         if bparams.get("enabled", True):
             out["boards"] = BoardsSource(s, bparams, db=self.db)

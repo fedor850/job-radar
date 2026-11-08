@@ -45,11 +45,79 @@ def _ms(ts) -> datetime | None:
 
 
 _REMOTE_OK = re.compile(r"austria|österreich|osterreich|europe|emea|dach|\beu\b|cee", re.I)
-_REMOTE_ONLY = re.compile(r"^\s*(remote|remote job|fully remote|anywhere|work from home|homeoffice)\s*$", re.I)
+_REMOTE_ONLY = re.compile(
+    r"^\s*(remote|remote job|fully remote|anywhere|work from home|homeoffice|worldwide|global|"
+    r"remote[\s,\-–—:/]+(worldwide|global|anywhere|everywhere))\s*$", re.I)
+
+#: a place that a remote job can be done from, as seen from Vienna
+_REGION_YES = re.compile(r"worldwide|world[\s-]?wide|anywhere|everywhere|global|emea|europe|european|\beu\b|dach|cee|"
+                         r"austria|österreich|osterreich|vienna|wien|\bcet\b|\bcest\b", re.I)
+#: a place that, named alone, means "not workable from Austria" (a country / region the job is tied to)
+_REGION_NO = re.compile(
+    r"\b(usa|u\.s\.a?|us|united states|america|americas|canada|latam|latin america|brazil|brasil|mexico|méxico|"
+    r"colombia|argentina|chile|peru|uruguay|costa rica|india|apac|asia|australia|new zealand|philippines|pakistan|"
+    r"bangladesh|indonesia|vietnam|japan|china|singapore|hong kong|korea|africa|nigeria|kenya|egypt|south africa|"
+    r"middle east|uae|dubai|saudi|israel|turkey|uk|united kingdom|england|ireland|germany|deutschland|france|spain|"
+    r"italy|portugal|poland|netherlands|belgium|sweden|denmark|norway|finland|switzerland|czech\w*|romania|bulgaria|"
+    r"greece|hungary|lithuania|latvia|estonia|ukraine|serbia|croatia|slovenia|slovakia|georgia|armenia|kazakhstan)\b",
+    re.I)
+
+
+def region_ok(places) -> bool:
+    """True when a remote job can be done from Austria. `places` is a string ("Remote - Europe", "USA", "Worldwide")
+    or a list of places. Empty = no restriction = ok. A place that names Austria / Europe / EMEA / worldwide wins
+    over the rest ("Europe or US" is ok); otherwise a named country or region ("USA", "Mexico", "Germany") or any
+    other place ("Boston") means no."""
+    if isinstance(places, (list, tuple)):
+        text = " | ".join(str(p) for p in places if p)
+    else:
+        text = str(places or "")
+    text = text.strip()
+    if not text or text.lower() in ("remote", "none", "[]"):
+        return True
+    if _REGION_YES.search(text):
+        return True
+    if _REGION_NO.search(text):
+        return False
+    # nothing recognised: if only generic words are left ("Remote", "Fully remote job", "Home office") there is no
+    # restriction; any other leftover is a place we do not know (a city, a state, a time zone) → tied to it
+    left = re.sub(r"remote(ly)?|work from home|home\s*office|hybrid|fully|100%|job|position|only|[\s,;:/|()\-–—]+", "",
+                  text, flags=re.I)
+    return not left
+
+
+#: job titles worth reading for a business student; used for jobs that are NOT in Vienna (remote), where the
+#: volume is large and most of it is software, design, health ... (see `remote_first` in `BoardsSource`)
+ROLE_RE = re.compile(
+    r"sales|account (executive|manager|associate)|key account|business development|\bbdr\b|\bsdr\b|\bbd\b|partnership|"
+    r"growth|marketing|customer (success|support|experience|care|service)|support (specialist|agent|associate)|"
+    r"operations|\bops\b|analyst|analytics|finance|financial|fp&a|account(ing|ant)|controll|treasury|risk|compliance|"
+    r"\baml\b|\bkyc\b|fraud|recruit|talent|\bpeople\b|\bhr\b|human resources|research|content|community|social media|"
+    r"product (manager|owner|analyst|operations|specialist|marketing)|project|program(me)? (manager|coordinator|assistant)|"
+    r"chief of staff|associate|assistant|coordinator|specialist|intern\b|internship|trainee|junior|\bjr\b|graduate|"
+    r"student|entry[\s-]?level|apprentice|consultant|consulting|strategy|procurement|supply chain|purchasing|\blegal\b|"
+    r"paralegal|esg|sustainab|automation|office manager|virtual assistant|translat|locali[sz]ation|copywrit|editor|"
+    r"communications|\bpr\b|brand|event|onboarding|implementation|solutions? consult|pre-?sales|business (analyst|"
+    r"partner|operations|manager)|payments?|lending|credit|underwriting|collections|treasury|reconciliation|"
+    r"back[\s-]?office|middle[\s-]?office|bookkeep|payroll|billing|invoic|trade|export|import|logistics", re.I)
+#: never of interest (engineering, design, health ... titles) even if a role word also matches
+NOT_ROLE_RE = re.compile(
+    r"engineer|developer|devops|\bsre\b|architect|programmer|software|back[\s-]?end|front[\s-]?end|full[\s-]?stack|"
+    r"\bqa\b|designer|\bux\b|\bui\b|machine learning|\bml\b|scientist|nurse|physician|clinical|therap|dentist|"
+    r"teacher|tutor|driver|mechanic|technician|welder|warehouse|electrician|cook|chef|barista|cleaner|"
+    r"security guard|pilot|surgeon|pharmac|veterinar|carpenter|plumber|golang|kubernetes|firmware|hardware|"
+    r"data engineer|data scientist|sdet|embedded", re.I)
+
+
+def role_ok(title: str) -> bool:
+    t = title or ""
+    return bool(ROLE_RE.search(t)) and not NOT_ROLE_RE.search(t)
 
 
 def _keep(location: str, text: str = "", remote: bool = False, params: dict | None = None) -> bool:
-    """Vienna area, or remote that is clearly workable from Austria (Austria/Europe/EMEA/DACH or plain 'Remote')."""
+    """Vienna area, or remote that is clearly workable from Austria (Austria/Europe/EMEA/DACH, 'Worldwide', or plain
+    'Remote'). `remote_first` boards (remote-first employers) also keep 'Europe / EMEA / Worldwide' without the word
+    'remote' and drop 'Remote - US / Mexico / Germany ...'."""
     params = params or {}
     if params.get("no_location_filter"):
         return True
@@ -58,9 +126,11 @@ def _keep(location: str, text: str = "", remote: bool = False, params: dict | No
     if location_ok(location, text):
         return True
     loc = (location or "").strip()
-    is_remote = remote or bool(re.search(r"remote|home\s*office|anywhere", loc, re.I))
+    is_remote = remote or bool(re.search(r"remote|home\s*office|anywhere|worldwide|world[\s-]?wide|global", loc, re.I))
     if is_remote and (_REMOTE_OK.search(loc) or _REMOTE_ONLY.match(loc) or not loc):
         return True
+    if params.get("remote_first"):
+        return (not loc and remote) or bool(_REGION_YES.search(loc)) or (is_remote and region_ok(loc))
     return False
 
 
@@ -575,6 +645,10 @@ class BoardsSource(Source):
                 return b, None, f"unknown kind {b['kind']}"
             try:
                 res = fn(b["key"], b["params"], b.get("company") or "")
+                if (b.get("params") or {}).get("remote_first"):
+                    # remote-first employer: all departments are on the board → read only business-type titles
+                    # (jobs located in Vienna are always kept)
+                    res = [j for j in res if role_ok(j.title) or location_ok(j.location)]
                 for j in res:
                     j.meta.setdefault("board_kind", b["kind"])
                     j.meta.setdefault("board_key", b["key"])

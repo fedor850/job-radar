@@ -76,6 +76,8 @@ def source_label(job: dict) -> str:
         return "Jooble"
     if fam == "careerjet":
         return "Careerjet"
+    if fam == "remotejobs":
+        return f"remote job board ({meta.get('remote_site') or 'remote'})"
     if fam in SITE_LABELS:
         return SITE_LABELS[fam]
     if ":" not in src:

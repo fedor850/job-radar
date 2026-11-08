@@ -188,7 +188,9 @@ unknowns, impressions and "likely/probably" are NEVER blockers (score the job on
   or it is a lead/head role (quote the title). 1–2 years required is NOT senior — mention it in risks.
 - wrong_field: clearly unrelated to business/economics (see profile "weaker fit"). Adjacent fields listed in the profile
   ("also a good fit") are NOT wrong_field — score them on their merits.
-- not_vienna: on-site outside the {{CITY}} area and not remote.
+- not_vienna: on-site outside the {{CITY}} area and not remote — OR a remote job that only people living in / allowed to work
+  in another country or region may do ("remote, US only", "must be located in Canada / Mexico / LATAM", "authorized to work
+  in the US"). Quote that restriction. NOT a blocker: "remote" with Europe / EMEA / Austria / worldwide / anywhere.
 - eu_only: requires EU/EEA citizenship or an existing unrestricted work permit.
 - not_eligible: only for a group he is not in (law students only, school pupils, apprenticeship, Master's only, graduates only).
 - expired: the application deadline has clearly passed (today's date is given; quote the deadline with its date).
@@ -524,9 +526,20 @@ def _ok_senior(q: str, job: dict, res: dict, today: date) -> bool:
     return bool(_SENIOR_WORDS.search(q))
 
 
+_RESTRICTION_WORD = re.compile(r"only|based|reside|resident|located|location|must|eligible|authori[sz]ed|citizen|"
+                               r"live in|living in|time\s*zone|open to|available to|hire in|hiring in", re.I)
+
+
 def _ok_not_vienna(q: str, job: dict, res: dict, today: date) -> bool:
-    if VIENNA_RE.search(q) or _REMOTE_WORD.search(q) or location_ok(job.get("location") or ""):
+    if VIENNA_RE.search(q) or location_ok(job.get("location") or ""):
         return False
+    if _REMOTE_WORD.search(q):
+        # a remote job is a valid "not_vienna" only when the quote ties it to another country / region and does not
+        # also name Austria / Europe / EMEA / worldwide ("Remote - US", "must be located in Canada")
+        from .sources.boards import _REGION_NO, _REGION_YES
+        if _REGION_YES.search(q) or not _REGION_NO.search(q):
+            return False
+        return len(q) <= 45 or bool(_RESTRICTION_WORD.search(q))
     return True
 
 
@@ -552,7 +565,8 @@ _CHECK_HINT_TEMPLATE = {
     "german_required": "quote must name German together with a level above B1 (gute/sehr gute/fließend/B2/C1/fluent/"
                        "German-speaking …), not 'von Vorteil'/'plus'/'B1' and not 'Deutsch oder Englisch'",
     "senior": "quote must state 3+ years of experience (or 'mehrjährige'/'several years') or a lead/head role",
-    "not_vienna": "quote must name the place of work outside {{CITY}} (and not remote/hybrid)",
+    "not_vienna": "quote must name the place of work outside {{CITY}} (not remote/hybrid), or tie a remote job to "
+                  "another country / region (\"remote, US only\", \"must be located in Canada\")",
     "eu_only": "quote must require EU/EEA citizenship or an existing work permit / labour-market access",
     "expired": "quote must contain the deadline date, and that date must be before today",
     "wrong_field": "quote must show the field of work",

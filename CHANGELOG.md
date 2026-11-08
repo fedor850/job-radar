@@ -18,6 +18,29 @@ Nothing is sent below the score threshold.
 - **Cut-off ads:** an ad where only the start (or a snippet) is known is sent only when that text is clearly English;
   a German or unclear cut-off ad is not sent.
 
+## [1.2.0] — 2026-11-08
+
+### Added
+- **Remote-first employers.** Many jobs workable from Vienna (fintechs in Mexico staffed from Europe, SaaS / crypto / AI
+  firms hiring "EMEA / Worldwide") are only on the employers' own career sites. New source `remotejobs`
+  (`sources/remote.py`) reads six public remote-job boards (Remotive, RemoteOK, We Work Remotely, Himalayas — filtered
+  server-side to Austria —, Jobicy, Working Nomads), keeps business-type titles that can be done from Austria
+  (`boards.role_ok`, `boards.region_ok`) and **teaches the bot the employer's own board**: from an ATS link in the ad, or
+  by guessing the slug on Greenhouse / Lever / Ashby / Recruitee / SmartRecruiters and accepting a board only when the
+  job seen on the remote board is on it with the same title (or the Greenhouse board's own name equals the company's).
+  Learned boards get `origin = remote-learned`, `remote_first` and a 30-min poll interval; a company that has no
+  board is not probed again for 10 days. Dry run on live data: 279 business-type jobs per full pass, 12 of the first
+  40 companies got their own board, no wrong match.
+- `remote_first` company boards (config `companies`): jobs outside Vienna are read only when the place is
+  Remote / Worldwide / Europe / EMEA / Austria / DACH (not "Remote - US", "Mexico") **and** the title is a business
+  role. 15 seeded (Plata, Nebius, OKX, GitLab, Supabase, Oyster, Eneba, lemlist, Synthesia, Cohere, Zapier, Sentry,
+  Lokalise, Typeform, SwissBorg).
+- Stop factor `not_vienna` now also covers a remote job open only to people living in another country ("remote, US
+  only", "must be located in Canada"); the quote is checked in code (`ai._ok_not_vienna`).
+
+### Fixed
+- Company boards dropped ads located "Worldwide" / "Global" (e.g. 30 of Plata's roles); they are kept now.
+
 ## [1.1.9] — 2026-11-08
 
 ### Added
