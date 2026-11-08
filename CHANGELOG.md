@@ -18,6 +18,16 @@ Nothing is sent below the score threshold.
 - **Cut-off ads:** an ad where only the start (or a snippet) is known is sent only when that text is clearly English;
   a German or unclear cut-off ad is not sent.
 
+## [1.1.9] — 2026-11-08
+
+### Added
+- **Adaptive LinkedIn pace** (`sources.linkedin.adaptive_pace`, `slow_delay_sec`). Weekend 07–08.11.2026: with a 3–5 s gap
+  every guest request got a 429 and passed only after a 25–50 s wait; 1 in ~15 gave up (30-min pause) and the source
+  delivered 1–4 new jobs an hour instead of 30–40. Now the gap widens to 20–32 s while ≥ 40 % of the last 12 requests
+  were refused (at least 6 requests seen) and returns to `delay_sec` once at most 1 of the last 12 was. Random single
+  429s on a quiet day do not trigger it. Simulated (virtual time, limiter models): same throughput when calm, 15–65 %
+  more requests and about half the 429s while LinkedIn throttles. 8 new tests.
+
 ## [1.1.8] — 2026-11-06
 
 ### Added

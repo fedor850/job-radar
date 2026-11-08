@@ -31,6 +31,8 @@ def fresh_state(monkeypatch):
     LinkedInSource._strikes = 0
     LinkedInSource._last_throttle = 0.0
     LinkedInSource._next_ok = 0.0
+    LinkedInSource._attempts = []
+    LinkedInSource._slow = False
     LinkedInSource._rr = 0
     LinkedInSource._day_runs = 0
     sleeps: list[float] = []
@@ -183,6 +185,110 @@ def test_requests_are_spaced(monkeypatch, fresh_state):
     assert LinkedInSource._next_ok - time.time() > 2.5  # the next request waits 3–5.5 s
     src._get("https://x/2")
     assert any(2.5 < s <= 5.5 for s in fresh_state)
+
+
+# ------------------------------------------------------------------ adaptive pace (Nov 2026)
+def gap_after_pass() -> float:
+    return LinkedInSource._next_ok - time.time()
+
+
+def feed(src, pattern: str) -> None:
+    """Record a series of request outcomes: 'x' = refused with 429, '.' = passed."""
+    for ch in pattern:
+        src._record(ch == "x")
+
+
+def test_calm_linkedin_keeps_the_fast_pace(monkeypatch):
+    script(monkeypatch, [Resp(200, "ok")])
+    src = make(delay_sec=(3.0, 5.5))
+    for i in range(10):
+        src._get(f"https://x/{i}")
+        assert 2.5 < gap_after_pass() <= 5.6
+    assert not LinkedInSource._slow
+
+
+def test_random_429s_do_not_slow_down():
+    """A quiet day still has ~10–25 % random 429s (one retry fixes them): that must not trigger slow mode."""
+    src = make()
+    feed(src, ".x...x..x..." * 3)
+    assert not LinkedInSource._slow and src.params.get("adaptive_pace", True)
+    src2 = make(delay_sec=(3.0, 5.5))
+    src2._pace()
+    assert gap_after_pass() <= 5.6
+
+
+def test_most_requests_refused_switches_to_wide_gaps(monkeypatch):
+    src = make(delay_sec=(3.0, 5.5), slow_delay_sec=(20, 32))
+    feed(src, "x.x.x.")  # the weekend pattern: every request is refused once, then passes (50 %)
+    assert LinkedInSource._slow
+    src._pace()
+    assert 19 <= gap_after_pass() <= 32.5
+
+
+def test_needs_enough_requests_before_switching():
+    src = make()
+    feed(src, "xxx")  # 100 % refused, but only 3 requests: too early to tell
+    assert not LinkedInSource._slow
+    feed(src, "xxx")
+    assert LinkedInSource._slow
+
+
+def test_returns_to_fast_pace_after_a_calm_stretch():
+    src = make(delay_sec=(3.0, 5.5), slow_delay_sec=(20, 32))
+    feed(src, "x.x.x.x.")
+    assert LinkedInSource._slow
+    feed(src, "." * 8)  # 8 passes: the history still holds refusals → stays slow (hysteresis)
+    assert LinkedInSource._slow
+    feed(src, "." * 12)  # the last 12 requests are clean
+    assert not LinkedInSource._slow
+    src._pace()
+    assert gap_after_pass() <= 5.6
+
+
+def test_real_get_feeds_the_mode(monkeypatch):
+    """_get itself records every refusal and every pass; after six requests of which half were refused → slow."""
+    src = make(delay_sec=(3.0, 5.5), slow_delay_sec=(20, 32), retries=2)
+    for i in range(3):
+        script(monkeypatch, [429, Resp(200, "ok")])
+        src._get(f"https://x/{i}")
+    assert LinkedInSource._attempts == [True, False] * 3 and LinkedInSource._slow
+    assert 19 <= gap_after_pass() <= 32.5
+
+
+def test_give_up_counts_and_still_pauses(monkeypatch):
+    script(monkeypatch, [429])
+    src = make(retries=2)
+    with pytest.raises(LinkedInBlocked):
+        src._get("https://x/1")
+    assert LinkedInSource._attempts == [True, True, True]  # every refused attempt is counted
+    assert LinkedInSource._strikes == 1 and LinkedInSource.cooldown_until > time.time()
+
+
+def test_other_errors_are_not_recorded(monkeypatch):
+    script(monkeypatch, [404])
+    with pytest.raises(http.HttpError):
+        make()._get("https://x/1")
+    assert LinkedInSource._attempts == []
+
+
+def test_adaptive_pace_can_be_switched_off(monkeypatch):
+    src = make(delay_sec=(3.0, 5.5), adaptive_pace=False)
+    feed(src, "x" * 12)
+    assert not LinkedInSource._slow
+    script(monkeypatch, [Resp(200, "ok")])
+    src._get("https://x/1")
+    assert gap_after_pass() <= 5.6
+
+
+def test_slow_mode_does_not_drop_cards(monkeypatch):
+    """Wide gaps change only the waiting, never what is read: the same pages give the same cards."""
+    src = make(delay_sec=(3.0, 5.5), slow_delay_sec=(20, 32), page_size=2)
+    feed(src, "x.x.x.")
+    assert LinkedInSource._slow
+    script(monkeypatch, [Resp(200, CARD.format(id=1) + CARD.format(id=2)), Resp(200, CARD.format(id=3)), Resp(200, "")])
+    out: dict = {}
+    src._run_query({"keywords": "intern"}, 3600, 5, out)
+    assert sorted(out) == ["1", "2", "3"]
 
 
 # ------------------------------------------------------------------ shared http helper: one patient 429 retry

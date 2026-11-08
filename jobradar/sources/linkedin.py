@@ -57,6 +57,9 @@ class LinkedInSource(Source):
     #: minimum gap between two requests: bursts of parallel detail requests were a main cause of the 429s
     _net_lock = threading.Lock()
     _next_ok: float = 0.0
+    #: outcome of the latest requests (True = refused with 429) and the adaptive-pace mode they put us in
+    _attempts: list[bool] = []
+    _slow: bool = False
 
     def _start_cooldown(self) -> int:
         """Pause after a request failed with 429 on every retry: 10 → 20 → 30 min while LinkedIn keeps refusing,
@@ -78,9 +81,35 @@ class LinkedInSource(Source):
     def _queries(self) -> list[dict]:
         return self.params.get("queries") or [{"keywords": "", "location": "Vienna, Vienna, Austria", "distance": 25}]
 
+    def _record(self, refused: bool) -> None:
+        """Remember the outcome of one request (not of other HTTP errors) and update the adaptive-pace mode."""
+        cls = LinkedInSource
+        n = int(self.params.get("adaptive_history", 12))
+        cls._attempts = (cls._attempts + [refused])[-n:]
+        if not self.params.get("adaptive_pace", True):
+            cls._slow = False
+            return
+        refusals = sum(cls._attempts)
+        if len(cls._attempts) >= int(self.params.get("adaptive_min_attempts", 6)):
+            if not cls._slow and refusals / len(cls._attempts) >= float(self.params.get("adaptive_enter_share", 0.4)):
+                cls._slow = True
+                self.log.info("LinkedIn keeps refusing (%d of the last %d requests) — slowing down",
+                              refusals, len(cls._attempts))
+            elif cls._slow and len(cls._attempts) >= n and refusals <= int(self.params.get("adaptive_leave_max", 1)):
+                cls._slow = False
+                self.log.info("LinkedIn is calm again (%d refusals in the last %d requests) — normal pace",
+                              refusals, n)
+
     def _pace(self) -> None:
-        """Earliest moment for the next request: a random gap after the one that just finished."""
+        """Earliest moment for the next request: a random gap after the one that just finished.
+
+        Adaptive pace. Measured 07–08.11.2026 (weekend): with a 3–5 s gap EVERY request got a 429 and passed only
+        after a 25–50 s wait, ~1 in 15 gave up (→ 30-min pause); on quiet days (04–06.11) the same gap gave
+        almost no 429s, and a lone 429 is random noise. So the gap is wide (`slow_delay_sec`) only while
+        ≥ 40 % of the last 12 requests were refused, and goes back to `delay_sec` once at most 1 of the last 12 was."""
         lo, hi = self.params.get("delay_sec", (3.0, 5.5))
+        if LinkedInSource._slow and self.params.get("adaptive_pace", True):
+            lo, hi = self.params.get("slow_delay_sec", (20.0, 32.0))
         LinkedInSource._next_ok = time.time() + random.uniform(lo, hi)
 
     def _get(self, url: str, kind: str = "search", ok: tuple = (200,)):
@@ -103,6 +132,7 @@ class LinkedInSource(Source):
                     if e.status not in _THROTTLE:
                         self._pace()
                         raise
+                    self._record(True)
                     if attempt < retries:
                         pause = random.uniform(lo, hi) * (attempt + 1)
                         self.log.info("LinkedIn %s on a %s request — retry %d/%d in %.0f s",
@@ -111,6 +141,7 @@ class LinkedInSource(Source):
                         continue
                     self._start_cooldown()
                     raise LinkedInBlocked(f"LinkedIn throttled ({e.status})") from e
+                self._record(False)
                 self._pace()
                 if attempt:
                     self.log.info("LinkedIn %s request passed after %d retr%s", kind, attempt, "y" if attempt == 1 else "ies")
