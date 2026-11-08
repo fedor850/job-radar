@@ -18,6 +18,15 @@ Nothing is sent below the score threshold.
 - **Cut-off ads:** an ad where only the start (or a snippet) is known is sent only when that text is clearly English;
   a German or unclear cut-off ad is not sent.
 
+## [1.2.1] — 2026-11-08
+
+### Fixed
+- **Adaptive LinkedIn pace left slow mode too early.** 12 clean requests made at the slow pace proved nothing about the
+  fast one: the bot sped up, was refused again within 3–18 minutes and paused for 20–30 min (observed 11:26→11:44 and
+  12:18→12:21). Slow mode is now left only when at most 1 of the last 12 requests was refused AND the last refusal is
+  `adaptive_hold_sec` (45 min) old. Simulated with a structured limiter: 135 instead of 86–108 requests an hour and
+  about 14× fewer refusals; with purely random 10 % refusals it keeps slow mode longer than needed (rare on real quiet days).
+
 ## [1.2.0] — 2026-11-08
 
 ### Added

@@ -33,6 +33,7 @@ def fresh_state(monkeypatch):
     LinkedInSource._next_ok = 0.0
     LinkedInSource._attempts = []
     LinkedInSource._slow = False
+    LinkedInSource._last_refusal = 0.0
     LinkedInSource._rr = 0
     LinkedInSource._day_runs = 0
     sleeps: list[float] = []
@@ -233,13 +234,16 @@ def test_needs_enough_requests_before_switching():
     assert LinkedInSource._slow
 
 
-def test_returns_to_fast_pace_after_a_calm_stretch():
+def test_returns_to_fast_pace_only_after_a_calm_stretch_AND_the_hold_time(monkeypatch):
     src = make(delay_sec=(3.0, 5.5), slow_delay_sec=(20, 32))
     feed(src, "x.x.x.x.")
     assert LinkedInSource._slow
-    feed(src, "." * 8)  # 8 passes: the history still holds refusals → stays slow (hysteresis)
+    feed(src, "." * 8)  # 8 passes: the history still holds refusals → stays slow
     assert LinkedInSource._slow
-    feed(src, "." * 12)  # the last 12 requests are clean
+    feed(src, "." * 12)  # the last 12 are clean, but the last refusal was seconds ago → stays slow (hold time)
+    assert LinkedInSource._slow
+    LinkedInSource._last_refusal = time.time() - 46 * 60  # 46 min without a refusal
+    feed(src, ".")
     assert not LinkedInSource._slow
     src._pace()
     assert gap_after_pass() <= 5.6

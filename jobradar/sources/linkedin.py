@@ -60,6 +60,7 @@ class LinkedInSource(Source):
     #: outcome of the latest requests (True = refused with 429) and the adaptive-pace mode they put us in
     _attempts: list[bool] = []
     _slow: bool = False
+    _last_refusal: float = 0.0
 
     def _start_cooldown(self) -> int:
         """Pause after a request failed with 429 on every retry: 10 → 20 → 30 min while LinkedIn keeps refusing,
@@ -86,6 +87,8 @@ class LinkedInSource(Source):
         cls = LinkedInSource
         n = int(self.params.get("adaptive_history", 12))
         cls._attempts = (cls._attempts + [refused])[-n:]
+        if refused:
+            cls._last_refusal = time.time()
         if not self.params.get("adaptive_pace", True):
             cls._slow = False
             return
@@ -95,7 +98,8 @@ class LinkedInSource(Source):
                 cls._slow = True
                 self.log.info("LinkedIn keeps refusing (%d of the last %d requests) — slowing down",
                               refusals, len(cls._attempts))
-            elif cls._slow and len(cls._attempts) >= n and refusals <= int(self.params.get("adaptive_leave_max", 1)):
+            elif (cls._slow and len(cls._attempts) >= n and refusals <= int(self.params.get("adaptive_leave_max", 1))
+                  and time.time() - cls._last_refusal >= float(self.params.get("adaptive_hold_sec", 2700))):
                 cls._slow = False
                 self.log.info("LinkedIn is calm again (%d refusals in the last %d requests) — normal pace",
                               refusals, n)
@@ -106,7 +110,9 @@ class LinkedInSource(Source):
         Adaptive pace. Measured 07–08.11.2026 (weekend): with a 3–5 s gap EVERY request got a 429 and passed only
         after a 25–50 s wait, ~1 in 15 gave up (→ 30-min pause); on quiet days (04–06.11) the same gap gave
         almost no 429s, and a lone 429 is random noise. So the gap is wide (`slow_delay_sec`) only while
-        ≥ 40 % of the last 12 requests were refused, and goes back to `delay_sec` once at most 1 of the last 12 was."""
+        ≥ 40 % of the last 12 requests were refused, and goes back to `delay_sec` only when at most 1 of the last 12 was
+        AND the last refusal is `adaptive_hold_sec` (45 min) old: 12 clean requests made at the slow pace prove
+        nothing about the fast one (08.11 first version left after ~12 min and was refused again within 3–18 min)."""
         lo, hi = self.params.get("delay_sec", (3.0, 5.5))
         if LinkedInSource._slow and self.params.get("adaptive_pace", True):
             lo, hi = self.params.get("slow_delay_sec", (20.0, 32.0))
