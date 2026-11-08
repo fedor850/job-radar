@@ -291,6 +291,16 @@ class Pipeline:
             if dup.get("tg_message_id"):
                 asyncio.get_running_loop().create_task(self.notifier.refresh_job(dup["id"]))
 
+    def _niche_refusal(self, job: dict) -> str:
+        """'' when an off-field side job may be delivered, else the reason it is not (feature off / ad is older)."""
+        if not self.settings.get("niche.enabled", False):
+            return "niche_off: side jobs outside the field are switched off"
+        since = parse_iso(str(self.settings.get("niche.since", "") or ""))
+        seen = parse_iso(job.get("first_seen"))
+        if since and (not seen or seen < since):
+            return "niche_old: an off-field job seen before the feature started"
+        return ""
+
     # ------------------------------------------------------------------ evaluation
     async def evaluate(self, job_id: int, raw: RawJob, source_name: str, silent: bool = False,
                        backfill: bool = False) -> str:
@@ -383,6 +393,13 @@ class Pipeline:
             score = self.min_score
             a["score"] = score
         self.db.update_job(job_id, score=score, analysis=a)
+        if a.get("niche"):
+            # an off-field side job: only for ads the radar saw for the first time after the feature was switched on
+            blockers.discard("wrong_field")
+            why = self._niche_refusal(job)
+            if why:
+                self.db.update_job(job_id, stage="blocked", reason=why)
+                return "blocked"
         jm = job.get("meta") or {}
         if (jm.get("snippet_only") or jm.get("text_cut")) and not blockers and score >= self.min_score:
             # only a piece of the ad is known: send it only when that piece is clearly English
@@ -398,6 +415,8 @@ class Pipeline:
                 a = job.get("analysis") or {}
                 score = int(job.get("score") or 0)
                 blockers = set(a.get("blockers") or []) & self.blocking
+                if a.get("niche"):
+                    blockers.discard("wrong_field")
         if blockers:
             self.db.update_job(job_id, stage="blocked", reason=",".join(sorted(blockers)))
             return "blocked"

@@ -1,3 +1,3 @@
 """Job Radar — real-time job alerts with AI scoring, a Telegram bot and an application tracker."""
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"

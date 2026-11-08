@@ -46,6 +46,8 @@ SCORE_SCHEMA_TEMPLATE = {
         "score": {"type": "integer", "description": "0-100 fit score"},
         "verdict": {"type": "string", "enum": ["strong", "good", "maybe", "weak", "reject"]},
         "blockers": {"type": "array", "items": {"type": "string", "enum": BLOCKERS}},
+        "niche": {"type": "boolean", "description": "true for an ordinary side job OUTSIDE business/economics that the "
+                                                    "candidate accepts (shop assistant, receptionist, admin, security…)"},
         "title_clean": {"type": "string", "description": "job title without gender tags like (m/w/d)"},
         "company_clean": {"type": "string"},
         "role_type": {"type": "string", "enum": ["internship", "trainee", "working_student", "part_time", "junior",
@@ -96,7 +98,7 @@ SCORE_SCHEMA_TEMPLATE = {
     },
     "required": ["score", "verdict", "blockers", "title_clean", "company_clean", "role_type", "hours", "hours_ok",
                  "german", "ad_language", "salary", "salary_20h_eur", "start", "deadline", "workplace", "location",
-                 "summary", "why", "risks", "tip", "german_evidence", "how_to_apply", "apply_docs", "cover_letter",
+                 "summary", "why", "risks", "tip", "german_evidence", "niche", "how_to_apply", "apply_docs", "cover_letter",
                  "missing", "evidence"],
     "additionalProperties": False,
 }
@@ -138,7 +140,7 @@ Reject ONLY when the TITLE makes it obvious that the job cannot fit (category in
   "Director") — but "Junior …", "Associate", "Assistant", "Trainee", "Intern", "Student" and plain "… Manager"
   titles are NOT senior (experience is checked later);
 - [unrelated_field] clearly unrelated field: medicine/nursing/care, therapy, pharmacy staff, construction or technical trades,
-  electricians, mechanics, kitchen/cooks/waiters/bar, cleaning, security guards, drivers/couriers, warehouse/production
+  electricians, mechanics, kitchen/cooks/waiters/bar, cleaning, drivers/couriers, warehouse/production
   workers, hairdressers, teachers/childcare, lawyers needing a law degree (Rechtsanwaltsanwärter, Konzipient),
   pure software/hardware/DevOps engineering, IT system administration, architecture/civil engineering,
   natural-science researchers/lab staff, video/graphic design as the core craft;
@@ -149,6 +151,10 @@ project work, customer success/support, start-up generalist roles, banking, audi
 supply-chain or logistics OFFICE roles, real estate, ESG/sustainability, NGO/international organisations, events,
 IT/SAP/ERP consulting, tech sales, research assistant in economics/business/social sciences, university student
 assistant jobs) at student/intern/junior/entry level → pass. When in doubt → pass.
+ALSO PASS ordinary light side jobs outside his field that he accepts: shop / retail sales assistants and consultants,
+cashiers, customer advisors, receptionists / front desk / concierge, office and administrative assistants,
+administrators, event / museum hosts, and security staff at a desk, reception or object (not heavy physical work).
+Never use [unrelated_field] for them.
 
 Candidate profile:
 """
@@ -187,13 +193,26 @@ unknowns, impressions and "likely/probably" are NEVER blockers (score the job on
 - senior: requires 3+ years of professional experience in that field (quote the sentence with the years / "mehrjährige"),
   or it is a lead/head role (quote the title). 1–2 years required is NOT senior — mention it in risks.
 - wrong_field: clearly unrelated to business/economics (see profile "weaker fit"). Adjacent fields listed in the profile
-  ("also a good fit") are NOT wrong_field — score them on their merits.
+  ("also a good fit") are NOT wrong_field — score them on their merits. Neither are the side jobs described under
+  "Side jobs outside his field" below.
 - not_vienna: on-site outside the {{CITY}} area and not remote — OR a remote job that only people living in / allowed to work
   in another country or region may do ("remote, US only", "must be located in Canada / Mexico / LATAM", "authorized to work
   in the US"). Quote that restriction. NOT a blocker: "remote" with Europe / EMEA / Austria / worldwide / anywhere.
 - eu_only: requires EU/EEA citizenship or an existing unrestricted work permit.
 - not_eligible: only for a group he is not in (law students only, school pupils, apprenticeship, Master's only, graduates only).
 - expired: the application deadline has clearly passed (today's date is given; quote the deadline with its date).
+
+Side jobs outside his field (set "niche": true, never wrong_field): {{FIRST}} ALSO accepts ordinary student side jobs that are
+not in business/economics: shop / retail sales assistant or consultant (Verkäufer:in, Berater:in im Verkauf, shop or store
+assistant), cashier, customer-service or brand-ambassador / promoter work, receptionist / front desk / concierge, office or
+administrative assistant, administrator, assistant roles, museum / gallery / event host, security staff at a desk, reception
+or object — i.e. light service and office work. NOT acceptable (wrong_field applies): heavy physical or dirty work — cleaning,
+delivery / courier / driver, loading / warehouse / picking, production line, construction and trades, kitchen / waiter / bar,
+care / medical, teaching / childcare. A role in a business field is never "niche". Score a niche role purely as a side job:
+62–78 when it is part-time or flexible with ≤ {{M}} h/week, in {{CITY}} and the language works; 45–60 when hours or pay are
+unclear. EVERY other rule applies unchanged — above all the language: German above B1, or an ad written in German that does
+not say English / "Deutsch oder Englisch" / German optional is enough, is german_required (shop, reception and security ads
+in {{CITY}} usually are — block them with the quote); a full-time job without part-time option is fulltime_only.
 
 German-language ads: if the DESCRIPTION is written in German (not just headings or the job board's interface) and
 the ad does NOT explicitly say that German is optional / a plus / basic is enough / "Deutsch oder Englisch" / English is

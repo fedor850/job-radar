@@ -94,6 +94,8 @@ def render_job(job: dict, status_line: str = "") -> str:
     if status_line:
         lines.append(status_line)
     lines.append(f"{score_badge(job.get('score'))} · <b>{esc(clip(title, 120))}</b>")
+    if a.get("niche"):
+        lines.append("🏷 <b>OUTSIDE YOUR FIELD</b> · side job")
 
     loc = a.get("location") or job.get("location") or ""
     wp = WORKPLACE.get(a.get("workplace", ""), "")

@@ -18,6 +18,16 @@ Nothing is sent below the score threshold.
 - **Cut-off ads:** an ad where only the start (or a snippet) is known is sent only when that text is clearly English;
   a German or unclear cut-off ad is not sent.
 
+## [1.3.0] — 2026-11-08
+- **Side jobs outside the field** (`niche.enabled`, `niche.since` in config): shop/retail sales assistants, cashiers, customer
+  advisors, receptionists, office/administrative assistants, event hosts and desk/reception security are no longer rejected
+  as "unrelated field". The AI marks them `niche: true`, scores them as a side job and the card carries the line
+  "🏷 OUTSIDE YOUR FIELD · side job". Heavy physical work (cleaning, delivery, driving, warehouse, kitchen, trades, care)
+  stays excluded. Every other stop factor — above all the language rules (`german_required`, German ads without an
+  English / optional-German sentence) and full-time — applies unchanged.
+- Only ads the radar saw for the first time after `niche.since` can be delivered as side jobs; anything older is not
+  re-screened. The security keywords were removed from `filters.title_exclude`.
+
 ## [1.2.1] — 2026-11-08
 
 ### Fixed

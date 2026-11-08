@@ -63,7 +63,7 @@ filters:
     - '\b(reinigung|raumpfleg|hausbesorg|haustechnik|elektriker|elektroniker|installateur|monteur|mechaniker|mechatroniker|schlosser|tischler|maurer|polier|maler und|spengler|dachdecker|schwei[ßs]er)'
     - '\b(lagerarbeit|kommissionier|staplerfahrer|lkw|fahrer|chauffeur|zusteller|kurier)'
     - '\b(lehrling|lehrstelle|lehre als|lehre zum|lehre zur|lehre nach der matura|sch[üu]ler)'
-    - '\b(friseur|nageldesign|masseur|fitnesstrainer|bademeister|sicherheitsdienst|wachdienst|security guard)'
+    - '\b(friseur|nageldesign|masseur|fitnesstrainer|bademeister)'
     - '\b(kindergarten|elementarp[äa]d|p[äa]dagog|tagesmutter|kinderbetreu)'
   company_exclude: []
   # Companies whose working language is English (regexes on the company name): their German-language ads WITHOUT
